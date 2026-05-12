@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # PostgreSQL 接続情報のみ（ANTHROPIC_API_KEY は不要）
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: learning
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+      DATABASE_URL: postgresql://postgres:pass@postgres:5432/learning
+    networks:
+      - dev-network
+
+  postgres:
+    image: postgres:16
+    container_name: pg-dev
+    environment:
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: learning
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learning"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dev-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  dev-network:
+    driver: bridge
