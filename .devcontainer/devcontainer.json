@@ -1,0 +1,39 @@
+{
+  "name": "rdb-learning-postgres",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "ms-azuretools.vscode-docker",
+        "anthropic.claude-code",
+        "GitHub.copilot",
+        "streetsidesoftware.code-spell-checker-japanese",
+        "yzhang.markdown-all-in-one",
+        "hediet.vscode-drawio"
+      ],
+      "settings": {
+        "sqltools.connections": [
+          {
+            "name": "PostgreSQL (pg-dev)",
+            "driver": "PostgreSQL",
+            "host": "postgres",
+            "port": 5432,
+            "database": "learning",
+            "username": "postgres",
+            "password": "pass"
+          }
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 2
+      }
+    }
+  },
+
+  "postCreateCommand": "bash .devcontainer/setup.sh"
+}

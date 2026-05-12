@@ -1,0 +1,19 @@
+# 環境変数（APIキーを含むため必ずgit管理外に）
+.devcontainer/.env
+
+# Docker
+.docker/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/settings.json
+*.swp
