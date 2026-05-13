@@ -4,7 +4,35 @@ set -e
 echo "🚀 開発環境セットアップ開始..."
 
 # ─────────────────────────────────────────
-# 1. PostgreSQL 接続確認
+# 1. Git 設定
+# ─────────────────────────────────────────
+echo "🔧 Git設定中..."
+git config --global safe.directory /workspace
+
+# SSH キーのパーミッション修正（マウントされた場合）
+if [ -d /root/.ssh ]; then
+  chmod 700 /root/.ssh
+  find /root/.ssh -type f -name "*.pub" -exec chmod 644 {} \;
+  find /root/.ssh -type f ! -name "*.pub" -exec chmod 600 {} \; 2>/dev/null || true
+fi
+
+# ホストから環境変数でユーザー情報が渡された場合は設定する
+if [ -n "${GIT_AUTHOR_NAME}" ]; then
+  git config --global user.name "${GIT_AUTHOR_NAME}"
+fi
+if [ -n "${GIT_AUTHOR_EMAIL}" ]; then
+  git config --global user.email "${GIT_AUTHOR_EMAIL}"
+fi
+
+# credential.helper のフォールバック（VS Code 外から使う場合）
+if ! git config --global credential.helper &>/dev/null; then
+  git config --global credential.helper store
+fi
+
+echo "✅ Git設定完了"
+
+# ─────────────────────────────────────────
+# 2. PostgreSQL 接続確認
 # ─────────────────────────────────────────
 echo "📦 PostgreSQL への接続を確認中..."
 until pg_isready -h postgres -U postgres -d learning; do
@@ -14,7 +42,7 @@ done
 echo "✅ PostgreSQL に接続できました"
 
 # ─────────────────────────────────────────
-# 2. 初期スキーマの投入
+# 3. 初期スキーマの投入
 # ─────────────────────────────────────────
 echo "📊 初期スキーマを投入中..."
 psql postgresql://postgres:pass@postgres:5432/learning \
@@ -22,7 +50,7 @@ psql postgresql://postgres:pass@postgres:5432/learning \
   2>/dev/null || echo "  スキーマ投入済み（スキップ）"
 
 # ─────────────────────────────────────────
-# 3. バージョン確認
+# 4. バージョン確認
 # ─────────────────────────────────────────
 echo ""
 echo "📌 インストール済みツール："
@@ -31,6 +59,7 @@ echo "  claude  : $(claude --version 2>/dev/null || echo '確認中...')"
 echo "  Go      : $(go version)"
 echo "  Rust    : $(rustc --version)"
 echo "  psql    : $(psql --version)"
+echo "  git     : $(git --version)"
 echo ""
 echo "✅ セットアップ完了！"
 echo ""

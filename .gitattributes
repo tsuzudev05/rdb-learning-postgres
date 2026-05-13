@@ -1,0 +1,20 @@
+# テキストファイルをコミット時に LF へ統一
+# Windows(CRLF) ↔ Linux(LF) 間の差異を防ぐ
+* text=auto eol=lf
+
+# シェルスクリプトは必ず LF
+*.sh eol=lf
+
+# SQL は必ず LF
+*.sql eol=lf
+
+# Markdown
+*.md eol=lf
+
+# バイナリファイル（変換しない）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
