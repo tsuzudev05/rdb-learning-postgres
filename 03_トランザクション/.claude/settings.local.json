@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python3 -m pip install psycopg2-binary)",
+      "Bash(apt-get install *)",
+      "Bash(apt-get update *)",
+      "Bash(python3 *)",
+      "Bash(bash *)"
+    ]
+  }
+}
