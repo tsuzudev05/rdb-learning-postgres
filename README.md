@@ -17,31 +17,26 @@ C++ / Rust / Go × DDD のポートフォリオ開発に向けた、データベ
 ```
 rdb-learning-postgres/
 ├── .devcontainer/
+│   ├── .env.example             # 環境変数サンプル
+│   ├── devcontainer-lock.json   # DevContainer ロックファイル
 │   ├── devcontainer.json        # VSCode DevContainer 設定
 │   ├── docker-compose.yml       # appコンテナ + PostgreSQL 16
 │   ├── Dockerfile               # Go / Rust 入り開発環境
 │   ├── setup.sh                 # 初回セットアップスクリプト
 │   └── init/
 │       └── 01_init_schema.sql   # コンテナ初回起動時に自動実行されるスキーマ
-├── 01_テーブル設計/
-│   ├── 正規化.md                # 第1〜第3正規形の解説と実例
-│   ├── ER図/                    # draw.io または Mermaid で作成したER図
-│   └── サンプルスキーマ.sql      # 学習用テーブル定義
 ├── 02_パフォーマンス/
-│   ├── インデックス設計.md       # インデックスの種類・貼る基準・EXPLAIN 読み方
-│   ├── クエリ最適化.sql          # EXPLAIN ANALYZE を用いたチューニング実例
+│   ├── benchmark_index.sh       # インデックス有無でのベンチマークスクリプト
 │   └── ベンチマーク結果.md       # インデックス有無での実行時間比較
 ├── 03_トランザクション/
+│   ├── benchmark_deadlock.sh    # デッドロック再現・回避策のベンチマークスクリプト
+│   ├── benchmark_isolation.sh   # 分離レベル挙動確認スクリプト
+│   ├── benchmark_transaction.sh # BEGIN/ROLLBACK/COMMIT 動作確認スクリプト
 │   ├── ACID特性.md              # ACID の解説と実際の動作確認
-│   ├── 分離レベル.sql            # READ COMMITTED / REPEATABLE READ の挙動確認
-│   └── デッドロック.md           # デッドロックの再現と回避策
-├── 04_DDD統合/
-│   ├── Repositoryパターン.md    # DDD × PostgreSQL の設計方針
-│   ├── cpp_example/             # C++ (libpqxx) による Repository 実装例
-│   └── go_example/              # Go (pgx) による Repository 実装例
-└── 05_実践課題/
-    ├── OKR管理スキーマ設計.md    # C++ ポートフォリオ向け DB 設計
-    └── 物流管理スキーマ設計.md   # Go ポートフォリオ向け DB 設計
+│   ├── デッドロック動作確認結果.md  # デッドロックの再現と回避策の動作確認結果
+│   └── 分離レベル動作確認結果.md   # READ COMMITTED / REPEATABLE READ の挙動確認結果
+├── 04_DDD統合/                  # [WIP] DDD × PostgreSQL の実装例
+└── 05_実践課題/                 # [WIP] OKR管理・物流管理スキーマ設計
 ```
 
 ---
@@ -58,7 +53,7 @@ rdb-learning-postgres/
 
 ---
 
-## 🛠️ [WIP] 環境構築（DevContainer）
+## 🛠️ 環境構築（DevContainer）
 
 VSCode の DevContainer を使うことで、PostgreSQL・Go・Rust が揃った開発環境を1コマンドで起動できる。
 
