@@ -17,3 +17,20 @@ Thumbs.db
 # エディタ
 .vscode/settings.json
 *.swp
+
+# C++
+*.o
+*.obj
+*.a
+*.so
+*.out
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# Go
+vendor/
+
+# Rust
+target/
