@@ -16,12 +16,12 @@ if [ -d /root/.ssh ]; then
   find /root/.ssh -type f ! -name "*.pub" -exec chmod 600 {} \; 2>/dev/null || true
 fi
 
-# ホストから環境変数でユーザー情報が渡された場合は設定する
-if [ -n "${GIT_AUTHOR_NAME}" ]; then
-  git config --global user.name "${GIT_AUTHOR_NAME}"
+# グローバルgit設定にuser.name/emailが未設定なら固定値を設定する
+if ! git config --global user.name &>/dev/null; then
+  git config --global user.name "tsuzudev05"
 fi
-if [ -n "${GIT_AUTHOR_EMAIL}" ]; then
-  git config --global user.email "${GIT_AUTHOR_EMAIL}"
+if ! git config --global user.email &>/dev/null; then
+  git config --global user.email "tsuzu.develop.05@gmail.com"
 fi
 
 # credential.helper のフォールバック（VS Code 外から使う場合）
