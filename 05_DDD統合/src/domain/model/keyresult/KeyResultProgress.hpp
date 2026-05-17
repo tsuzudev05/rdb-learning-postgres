@@ -3,7 +3,7 @@
 #include <variant>
 #include <optional>
 #include <string>
-#include "../../common/Result.hpp"
+#include "../../../common/Result.hpp"
 
 // =============================================================================
 // NumericProgress — 数値進捗を表す値オブジェクト

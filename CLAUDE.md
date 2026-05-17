@@ -85,7 +85,8 @@ auto id = result.value();
 
 | ファイル                                       | 内容                                  |
 | ---------------------------------------------- | ------------------------------------- |
-| `common/Result.hpp`                            | `Result<T>` / `Result<void>` 自前実装 |
+| `common/Result.hpp`                            | `Result<T>` / `Result<void>` 自前実装（in_place構築・void特殊化のok()名前衝突を修正済み） |
+| `common/UuidId.hpp`                            | 型安全UUID IDテンプレート `UuidId<Tag>`（フェーズ2で追加） |
 | `domain/model/user/UserId.hpp`                 | UUID v4 バリデーション                |
 | `domain/model/user/Email.hpp`                  | RFC5322 簡易検証・小文字正規化        |
 | `domain/model/team/Role.hpp`                   | `admin` / `member` 列挙型             |
@@ -93,7 +94,7 @@ auto id = result.value();
 | `domain/model/period/DateRange.hpp`            | `start < end` 保証                    |
 | `domain/model/keyresult/KeyResultProgress.hpp` | `std::variant` による Union型         |
 
-### フェーズ2：エンティティ ⬜
+### フェーズ2：エンティティ ✅
 
 - `User` / `Team` / `TeamMember`
 - `Period` / `Objective` / `KeyResult` / `KrProgressLog`

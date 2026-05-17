@@ -4,54 +4,41 @@
 #include <string>
 #include <variant>
 
-// =============================================================================
-// Result<T> — ドメイン層共通エラーハンドリング型
-// std::expected (C++23) の自前実装。外部依存ゼロ。
+// Result<T> -- domain layer error handling type
+// Self-implementation of std::expected (C++23). No external dependencies.
 //
-// 使い方:
-//   Result<User> r = UserFactory::create("alice@example.com");
-//   if (!r) { std::cerr << r.error() << "\n"; }
-//   User user = r.value();
-//
-//   Result<void> r2 = repo.save(user);
-//   if (!r2) { ... }
-// =============================================================================
+// Design notes:
+//   - static ok() / err() factories use in_place construction to avoid
+//     requiring T to be default-constructible (important for value objects
+//     whose constructors are private).
+//   - Result<void> specialization: C++ does not allow a static and non-static
+//     member function with the same name, so instance ok() is omitted;
+//     use operator bool() to check success instead.
 
-// -----------------------------------------------------------------------------
-// DomainError — ドメイン層のエラー型
-// -----------------------------------------------------------------------------
 struct DomainError {
     std::string message;
     explicit DomainError(std::string msg) : message(std::move(msg)) {}
 };
 
-// -----------------------------------------------------------------------------
-// Result<T> — 成功値 or DomainError を保持する型
-// -----------------------------------------------------------------------------
+// Result<T> -- holds success value or DomainError
 template <typename T>
 class Result {
 public:
-    // 成功
     static Result ok(T value) {
-        Result r;
-        r.storage_ = std::move(value);
-        return r;
+        return Result{std::variant<T, DomainError>{
+            std::in_place_type<T>, std::move(value)}};
     }
 
-    // 失敗
     static Result err(std::string message) {
-        Result r;
-        r.storage_ = DomainError{std::move(message)};
-        return r;
+        return Result{std::variant<T, DomainError>{
+            std::in_place_type<DomainError>, std::move(message)}};
     }
 
-    // 成功判定
     bool ok() const {
         return std::holds_alternative<T>(storage_);
     }
     explicit operator bool() const { return ok(); }
 
-    // 成功値の取得（失敗時は例外）
     const T& value() const {
         if (!ok()) throw std::logic_error("Result is error: " + error());
         return std::get<T>(storage_);
@@ -61,18 +48,18 @@ public:
         return std::get<T>(storage_);
     }
 
-    // エラーメッセージの取得
     const std::string& error() const {
         return std::get<DomainError>(storage_).message;
     }
 
 private:
+    explicit Result(std::variant<T, DomainError> storage)
+        : storage_(std::move(storage)) {}
+
     std::variant<T, DomainError> storage_;
 };
 
-// -----------------------------------------------------------------------------
-// Result<void> — 成功 or DomainError（値なし版）
-// -----------------------------------------------------------------------------
+// Result<void> -- success or DomainError (no value variant)
 template <>
 class Result<void> {
 public:
@@ -85,16 +72,15 @@ public:
     static Result err(std::string message) {
         Result r;
         r.success_ = false;
-        r.error_ = std::move(message);
+        r.error_message_ = std::move(message);
         return r;
     }
 
-    bool ok() const { return success_; }
-    explicit operator bool() const { return ok(); }
+    explicit operator bool() const { return success_; }
 
-    const std::string& error() const { return error_; }
+    const std::string& error() const { return error_message_; }
 
 private:
-    bool success_ = false;
-    std::string error_;
+    bool        success_       = false;
+    std::string error_message_;
 };

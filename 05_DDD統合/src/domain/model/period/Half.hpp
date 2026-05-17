@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "../../common/Result.hpp"
+#include "../../../common/Result.hpp"
 
 // =============================================================================
 // Half — 上期 / 下期を表す値オブジェクト

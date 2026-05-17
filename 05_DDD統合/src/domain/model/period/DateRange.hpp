@@ -2,7 +2,7 @@
 
 #include <string>
 #include <chrono>
-#include "../../common/Result.hpp"
+#include "../../../common/Result.hpp"
 
 // =============================================================================
 // DateRange — 期間（開始日〜終了日）を表す値オブジェクト

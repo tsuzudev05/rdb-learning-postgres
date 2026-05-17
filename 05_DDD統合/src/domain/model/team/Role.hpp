@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "../../common/Result.hpp"
+#include "../../../common/Result.hpp"
 
 // =============================================================================
 // Role — チームメンバーのロールを表す値オブジェクト
