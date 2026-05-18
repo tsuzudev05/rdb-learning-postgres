@@ -99,9 +99,15 @@ auto id = result.value();
 - `User` / `Team` / `TeamMember`
 - `Period` / `Objective` / `KeyResult` / `KrProgressLog`
 
-### フェーズ3：Repositoryインターフェース ⬜
+### フェーズ3：Repositoryインターフェース ✅
 
-- `IUserRepository` / `IObjectiveRepository` / `IKeyResultRepository`
+| ファイル                                                  | 内容                                      |
+| --------------------------------------------------------- | ----------------------------------------- |
+| `domain/repository/IUserRepository.hpp`                   | findById / findByEmail / findAll / save / remove |
+| `domain/repository/ITeamRepository.hpp`                   | findById / findByUserId / findAll / save / remove（TeamMember一括管理） |
+| `domain/repository/IPeriodRepository.hpp`                 | findById / findByTeamId / findAll / save / remove |
+| `domain/repository/IObjectiveRepository.hpp`              | findById / findByPeriodId / findByOwnerId / save / remove |
+| `domain/repository/IKeyResultRepository.hpp`              | findById / findByObjectiveId / findByOwnerId / save / remove（KrProgressLog一括管理） |
 
 ### フェーズ4：libpqxx 実装 ⬜
 
