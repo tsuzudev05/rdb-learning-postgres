@@ -109,9 +109,13 @@ auto id = result.value();
 | `domain/repository/IObjectiveRepository.hpp`              | findById / findByPeriodId / findByOwnerId / save / remove |
 | `domain/repository/IKeyResultRepository.hpp`              | findById / findByObjectiveId / findByOwnerId / save / remove（KrProgressLog一括管理） |
 
-### フェーズ4：libpqxx 実装 ⬜
+### フェーズ4：libpqxx 実装 ✅
 
-- `PgUserRepository` / `PgObjectiveRepository` / `PgKeyResultRepository`
+| ファイル                                                      | 内容                                      |
+| ------------------------------------------------------------- | ----------------------------------------- |
+| `infrastructure/repository/PgUserRepository.hpp`              | findById / findByEmail / findAll / save（upsert）/ remove |
+| `infrastructure/repository/PgObjectiveRepository.hpp`         | findById / findByPeriodId / findByOwnerId / save（upsert）/ remove |
+| `infrastructure/repository/PgKeyResultRepository.hpp`         | findById / findByObjectiveId / findByOwnerId / save（KeyResult + KrProgressLog 一括）/ remove |
 
 ---
 
