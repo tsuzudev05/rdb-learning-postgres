@@ -5,13 +5,15 @@ ENV LANG=ja_JP.UTF-8
 ENV LC_ALL=ja_JP.UTF-8
 
 # ─────────────────────────────────────────
-# Step 1: 基本パッケージ + PostgreSQLクライアント
+# Step 1: 基本パッケージ + PostgreSQLクライアント + C++ビルドツール
 # ─────────────────────────────────────────
 RUN apt-get update && apt-get install -y \
     curl wget git vim bash-completion \
     ca-certificates gnupg \
     postgresql-client-16 \
     tar gzip locales \
+    build-essential cmake pkg-config \
+    libpqxx-dev libpq-dev \
     && locale-gen ja_JP.UTF-8 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

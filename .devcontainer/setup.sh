@@ -16,7 +16,6 @@ if [ -d /root/.ssh ]; then
   find /root/.ssh -type f ! -name "*.pub" -exec chmod 600 {} \; 2>/dev/null || true
 fi
 
-# グローバルgit設定にuser.name/emailが未設定なら固定値を設定する
 if ! git config --global user.name &>/dev/null; then
   git config --global user.name "tsuzudev05"
 fi
@@ -24,7 +23,6 @@ if ! git config --global user.email &>/dev/null; then
   git config --global user.email "tsuzu.develop.05@gmail.com"
 fi
 
-# credential.helper のフォールバック（VS Code 外から使う場合）
 if ! git config --global credential.helper &>/dev/null; then
   git config --global credential.helper store
 fi
@@ -42,26 +40,44 @@ done
 echo "✅ PostgreSQL に接続できました"
 
 # ─────────────────────────────────────────
-# 3. 初期スキーマの投入
+# 3. DDD スキーマの投入（05_DDD統合/schema.sql を使用）
+#    init/01_init_schema.sql（SERIAL型）で作られた既存テーブルを
+#    一旦削除して UUID ベースの DDD スキーマに差し替える
 # ─────────────────────────────────────────
-echo "📊 初期スキーマを投入中..."
+echo "📊 DDD スキーマを投入中..."
 psql postgresql://postgres:pass@postgres:5432/learning \
-  -f /workspace/.devcontainer/init/01_init_schema.sql \
-  2>/dev/null || echo "  スキーマ投入済み（スキップ）"
+  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres;" \
+  && psql postgresql://postgres:pass@postgres:5432/learning \
+     -f /workspace/05_DDD統合/schema.sql \
+  && echo "✅ DDD スキーマ投入完了" \
+  || echo "  ⚠️  スキーマ投入でエラーが発生しました"
 
 # ─────────────────────────────────────────
-# 4. バージョン確認
+# 4. C++ ビルドディレクトリの準備
+# ─────────────────────────────────────────
+echo "🔨 C++ ビルドディレクトリを準備中..."
+mkdir -p /workspace/05_DDD統合/build
+chmod +x /workspace/scripts/*.sh 2>/dev/null || true
+echo "✅ 準備完了"
+
+# ─────────────────────────────────────────
+# 5. バージョン確認
 # ─────────────────────────────────────────
 echo ""
 echo "📌 インストール済みツール："
-echo "  Node.js : $(node --version)"
-echo "  claude  : $(claude --version 2>/dev/null || echo '確認中...')"
+echo "  g++     : $(g++ --version | head -1)"
+echo "  make    : $(make --version | head -1)"
+echo "  libpqxx : $(pkg-config --modversion libpqxx 2>/dev/null || echo '確認中...')"
 echo "  Go      : $(go version)"
 echo "  Rust    : $(rustc --version)"
+echo "  Node.js : $(node --version)"
 echo "  psql    : $(psql --version)"
 echo "  git     : $(git --version)"
 echo ""
 echo "✅ セットアップ完了！"
+echo ""
+echo "💡 テストを実行するには："
+echo "   $ bash /workspace/scripts/test.sh"
 echo ""
 echo "🤖 Claude Code を使うには："
 echo "   $ claude          # 対話モードで起動"
