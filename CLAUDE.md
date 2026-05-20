@@ -117,6 +117,25 @@ auto id = result.value();
 | `infrastructure/repository/PgObjectiveRepository.hpp`         | findById / findByPeriodId / findByOwnerId / save（upsert）/ remove |
 | `infrastructure/repository/PgKeyResultRepository.hpp`         | findById / findByObjectiveId / findByOwnerId / save（KeyResult + KrProgressLog 一括）/ remove |
 
+### フェーズ5：Go (pgx) 実装 ✅
+
+配置先: `05_DDD統合/go/`
+
+| ファイル                                                      | 内容                                      |
+| ------------------------------------------------------------- | ----------------------------------------- |
+| `go.mod`                                                      | Go モジュール（pgx v5 依存）              |
+| `domain/model/user/user_id.go`                                | 値オブジェクト UserId（UUID v4バリデーション） |
+| `domain/model/user/email.go`                                  | 値オブジェクト Email（正規化・バリデーション） |
+| `domain/model/user/user.go`                                   | エンティティ User（集約ルート）           |
+| `domain/repository/user_repository.go`                        | インターフェース UserRepository           |
+| `infrastructure/repository/pg_user_repository.go`             | FindByID / FindByEmail / FindAll / Save（upsert）/ Remove |
+| `cmd/smoke/main.go`                                           | スモークテスト（C++ 版と同等の CRUD 確認）|
+
+**C++ との主な対応:**
+- `Result<T>` → `(T, error)` の多値返却
+- `std::optional<T>` → `*T`（nilポインタ）
+- `pqxx::connection` → `pgxpool.Pool`
+
 ---
 
 ## DBスキーマ
