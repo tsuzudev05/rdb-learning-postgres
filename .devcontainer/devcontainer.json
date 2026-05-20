@@ -12,6 +12,11 @@
     "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
   ],
 
+  "remoteEnv": {
+    "GIT_USER_NAME": "${localEnv:GIT_USER_NAME}",
+    "GIT_USER_EMAIL": "${localEnv:GIT_USER_EMAIL}"
+  },
+
   "customizations": {
     "vscode": {
       "extensions": [

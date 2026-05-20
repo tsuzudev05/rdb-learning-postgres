@@ -17,10 +17,10 @@ if [ -d /root/.ssh ]; then
 fi
 
 if ! git config --global user.name &>/dev/null; then
-  git config --global user.name "tsuzudev05"
+  git config --global user.name "${GIT_USER_NAME}"
 fi
 if ! git config --global user.email &>/dev/null; then
-  git config --global user.email "tsuzu.develop.05@gmail.com"
+  git config --global user.email "${GIT_USER_EMAIL}"
 fi
 
 if ! git config --global credential.helper &>/dev/null; then
@@ -41,16 +41,19 @@ echo "✅ PostgreSQL に接続できました"
 
 # ─────────────────────────────────────────
 # 3. DDD スキーマの投入（05_DDD統合/schema.sql を使用）
-#    init/01_init_schema.sql（SERIAL型）で作られた既存テーブルを
-#    一旦削除して UUID ベースの DDD スキーマに差し替える
+#    users テーブルが存在しない場合のみ投入する（再起動時のデータ消失を防ぐ）
 # ─────────────────────────────────────────
-echo "📊 DDD スキーマを投入中..."
-psql postgresql://postgres:pass@postgres:5432/learning \
-  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres;" \
-  && psql postgresql://postgres:pass@postgres:5432/learning \
-     -f /workspace/05_DDD統合/schema.sql \
+echo "📊 DDD スキーマを確認中..."
+TABLE_EXISTS=$(psql postgresql://postgres:pass@postgres:5432/learning -tAc "SELECT to_regclass('public.users')")
+if [ -z "$TABLE_EXISTS" ]; then
+  echo "  テーブルが存在しないためスキーマを投入します..."
+  psql postgresql://postgres:pass@postgres:5432/learning \
+    -f /workspace/05_DDD統合/schema.sql \
   && echo "✅ DDD スキーマ投入完了" \
   || echo "  ⚠️  スキーマ投入でエラーが発生しました"
+else
+  echo "✅ DDD スキーマ投入済み（スキップ）"
+fi
 
 # ─────────────────────────────────────────
 # 4. C++ ビルドディレクトリの準備
