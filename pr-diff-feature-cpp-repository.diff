@@ -1,0 +1,4719 @@
+diff --git a/.claude/settings.local.json b/.claude/settings.local.json
+new file mode 100644
+index 0000000..dcde650
+--- /dev/null
++++ b/.claude/settings.local.json
+@@ -0,0 +1,7 @@
++{
++  "permissions": {
++    "allow": [
++      "Bash(git config *)"
++    ]
++  }
++}
+diff --git a/.devcontainer/Dockerfile b/.devcontainer/Dockerfile
+index 154e210..102a31c 100644
+--- a/.devcontainer/Dockerfile
++++ b/.devcontainer/Dockerfile
+@@ -5,13 +5,15 @@ ENV LANG=ja_JP.UTF-8
+ ENV LC_ALL=ja_JP.UTF-8
+ 
+ # ─────────────────────────────────────────
+-# Step 1: 基本パッケージ + PostgreSQLクライアント
++# Step 1: 基本パッケージ + PostgreSQLクライアント + C++ビルドツール
+ # ─────────────────────────────────────────
+ RUN apt-get update && apt-get install -y \
+     curl wget git vim bash-completion \
+     ca-certificates gnupg \
+     postgresql-client-16 \
+     tar gzip locales \
++    build-essential cmake pkg-config \
++    libpqxx-dev libpq-dev \
+     && locale-gen ja_JP.UTF-8 \
+     && apt-get clean && rm -rf /var/lib/apt/lists/*
+ 
+diff --git a/.devcontainer/devcontainer.json b/.devcontainer/devcontainer.json
+index 75cd212..76b0179 100644
+--- a/.devcontainer/devcontainer.json
++++ b/.devcontainer/devcontainer.json
+@@ -12,13 +12,6 @@
+     "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+   ],
+ 
+-  "remoteEnv": {
+-    "GIT_AUTHOR_NAME": "${localEnv:GIT_AUTHOR_NAME}",
+-    "GIT_AUTHOR_EMAIL": "${localEnv:GIT_AUTHOR_EMAIL}",
+-    "GIT_COMMITTER_NAME": "${localEnv:GIT_COMMITTER_NAME}",
+-    "GIT_COMMITTER_EMAIL": "${localEnv:GIT_COMMITTER_EMAIL}"
+-  },
+-
+   "customizations": {
+     "vscode": {
+       "extensions": [
+diff --git a/.devcontainer/docker-compose.yml b/.devcontainer/docker-compose.yml
+index 4a6d1ea..ccd7bb1 100644
+--- a/.devcontainer/docker-compose.yml
++++ b/.devcontainer/docker-compose.yml
+@@ -1,5 +1,3 @@
+-version: "3.9"
+-
+ services:
+   app:
+     build:
+diff --git a/.devcontainer/setup.sh b/.devcontainer/setup.sh
+index 2ec01d9..1a69675 100644
+--- a/.devcontainer/setup.sh
++++ b/.devcontainer/setup.sh
+@@ -16,15 +16,13 @@ if [ -d /root/.ssh ]; then
+   find /root/.ssh -type f ! -name "*.pub" -exec chmod 600 {} \; 2>/dev/null || true
+ fi
+ 
+-# ホストから環境変数でユーザー情報が渡された場合は設定する
+-if [ -n "${GIT_AUTHOR_NAME}" ]; then
+-  git config --global user.name "${GIT_AUTHOR_NAME}"
++if ! git config --global user.name &>/dev/null; then
++  git config --global user.name "tsuzudev05"
+ fi
+-if [ -n "${GIT_AUTHOR_EMAIL}" ]; then
+-  git config --global user.email "${GIT_AUTHOR_EMAIL}"
++if ! git config --global user.email &>/dev/null; then
++  git config --global user.email "tsuzu.develop.05@gmail.com"
+ fi
+ 
+-# credential.helper のフォールバック（VS Code 外から使う場合）
+ if ! git config --global credential.helper &>/dev/null; then
+   git config --global credential.helper store
+ fi
+@@ -42,27 +40,45 @@ done
+ echo "✅ PostgreSQL に接続できました"
+ 
+ # ─────────────────────────────────────────
+-# 3. 初期スキーマの投入
++# 3. DDD スキーマの投入（05_DDD統合/schema.sql を使用）
++#    init/01_init_schema.sql（SERIAL型）で作られた既存テーブルを
++#    一旦削除して UUID ベースの DDD スキーマに差し替える
+ # ─────────────────────────────────────────
+-echo "📊 初期スキーマを投入中..."
++echo "📊 DDD スキーマを投入中..."
+ psql postgresql://postgres:pass@postgres:5432/learning \
+-  -f /workspace/.devcontainer/init/01_init_schema.sql \
+-  2>/dev/null || echo "  スキーマ投入済み（スキップ）"
++  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres;" \
++  && psql postgresql://postgres:pass@postgres:5432/learning \
++     -f /workspace/05_DDD統合/schema.sql \
++  && echo "✅ DDD スキーマ投入完了" \
++  || echo "  ⚠️  スキーマ投入でエラーが発生しました"
+ 
+ # ─────────────────────────────────────────
+-# 4. バージョン確認
++# 4. C++ ビルドディレクトリの準備
++# ─────────────────────────────────────────
++echo "🔨 C++ ビルドディレクトリを準備中..."
++mkdir -p /workspace/05_DDD統合/build
++chmod +x /workspace/scripts/*.sh 2>/dev/null || true
++echo "✅ 準備完了"
++
++# ─────────────────────────────────────────
++# 5. バージョン確認
+ # ─────────────────────────────────────────
+ echo ""
+ echo "📌 インストール済みツール："
+-echo "  Node.js : $(node --version)"
+-echo "  claude  : $(claude --version 2>/dev/null || echo '確認中...')"
++echo "  g++     : $(g++ --version | head -1)"
++echo "  make    : $(make --version | head -1)"
++echo "  libpqxx : $(pkg-config --modversion libpqxx 2>/dev/null || echo '確認中...')"
+ echo "  Go      : $(go version)"
+ echo "  Rust    : $(rustc --version)"
++echo "  Node.js : $(node --version)"
+ echo "  psql    : $(psql --version)"
+ echo "  git     : $(git --version)"
+ echo ""
+ echo "✅ セットアップ完了！"
+ echo ""
++echo "💡 テストを実行するには："
++echo "   $ bash /workspace/scripts/test.sh"
++echo ""
+ echo "🤖 Claude Code を使うには："
+ echo "   $ claude          # 対話モードで起動"
+ echo "   $ claude login    # 初回ログイン（ブラウザ認証）"
+diff --git a/.gitignore b/.gitignore
+index d05342c..aee2f52 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -17,3 +17,22 @@ Thumbs.db
+ # エディタ
+ .vscode/settings.json
+ *.swp
++
++# C++
++*.o
++*.obj
++*.a
++*.so
++*.out
++build/
++cmake-build-*/
++CMakeCache.txt
++CMakeFiles/
++
++# Go
++vendor/
++
++# Rust
++target/
++
++DAILY_WORKFLOW.md
+\ No newline at end of file
+diff --git "a/05_DDD\347\265\261\345\220\210/Makefile" "b/05_DDD\347\265\261\345\220\210/Makefile"
+new file mode 100644
+index 0000000..0a8d8e3
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/Makefile"
+@@ -0,0 +1,37 @@
++# =============================================================================
++# Makefile — OKR Management Tool C++ ビルド
++# DevContainer 内の /workspace/05_DDD統合/ で実行する
++#
++# 使い方:
++#   make          ビルド（デフォルト）
++#   make build    ビルド
++#   make test     ビルド + スモークテスト実行
++#   make clean    ビルド成果物を削除
++# =============================================================================
++
++CXX      := g++
++CXXFLAGS := -std=c++17 -Wall -Wextra
++INCLUDES := -I./src $(shell pkg-config --cflags libpqxx 2>/dev/null)
++LIBS     := $(shell pkg-config --libs libpqxx 2>/dev/null || echo "-lpqxx -lpq")
++
++BUILD_DIR := ./build
++TARGET    := $(BUILD_DIR)/okr_smoke_test
++
++.PHONY: all build test clean
++
++all: build
++
++build: $(TARGET)
++
++$(TARGET): src/main.cpp
++	mkdir -p $(BUILD_DIR)
++	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(LIBS) -o $@
++	@echo "✅ ビルド成功: $@"
++
++test: build
++	@echo "🚀 スモークテスト実行..."
++	DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning $(TARGET)
++
++clean:
++	rm -rf $(BUILD_DIR)
++	@echo "🧹 ビルドディレクトリを削除しました"
+diff --git "a/05_DDD\347\265\261\345\220\210/docs/domain-model.md" "b/05_DDD\347\265\261\345\220\210/docs/domain-model.md"
+new file mode 100644
+index 0000000..aa256f5
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/docs/domain-model.md"
+@@ -0,0 +1,281 @@
++# ドメインモデル設計書
++
++OKR管理ツールのDDD（ドメイン駆動設計）に基づく概念設計。  
++クリーンアーキテクチャと組み合わせ、ドメイン知識をコードで表現することを目的とする。
++
++---
++
++## ユビキタス言語（Ubiquitous Language）
++
++チーム全員が共通で使う用語を定義する。コード・ドキュメント・会話で統一して使用する。
++
++| 用語（日本語） | 用語（英語） | 説明 |
++|---|---|---|
++| ユーザー | User | システムを利用するメンバー |
++| チーム | Team | OKRを共有・管理するグループ |
++| チームメンバー | TeamMember | チームに所属するUser。ロールを持つ |
++| ロール | Role | admin（管理者）/ member（一般）|
++| 期間 | Period | OKRを管理する半期単位のサイクル（H1/H2）|
++| 目標 | Objective | 「何を達成したいか」を表す定性的な目標 |
++| 主要な結果 | KeyResult | Objectiveの達成度を測る定量・定性指標 |
++| 数値KR | NumericKeyResult | 数値で進捗を管理するKR |
++| チェックKR | CheckboxKeyResult | 完了/未完了で管理するKR |
++| 進捗ログ | ProgressLog | KRの進捗を時系列で記録したもの |
++| オーナー | Owner | ObjectiveまたはKRの責任者となるUser |
++
++---
++
++## 集約設計（Aggregates）
++
++DDDにおける集約境界と集約ルートを定義する。  
++集約の外からは **必ず集約ルートを経由してアクセス** する。
++
++```
++┌─────────────────────────────────────────────────────┐
++│  Team 集約                                          │
++│  ┌─────────┐    ┌─────────────────┐                │
++│  │  Team   │───▶│  TeamMember[]   │                │
++│  │  (Root) │    │  - role         │                │
++│  └─────────┘    └─────────────────┘                │
++└─────────────────────────────────────────────────────┘
++
++┌─────────────────────────────────────────────────────┐
++│  Period 集約                                        │
++│  ┌──────────┐                                       │
++│  │  Period  │                                       │
++│  │  (Root)  │                                       │
++│  └──────────┘                                       │
++└─────────────────────────────────────────────────────┘
++
++┌─────────────────────────────────────────────────────┐
++│  Objective 集約                                     │
++│  ┌───────────┐                                      │
++│  │ Objective │                                      │
++│  │  (Root)   │                                      │
++│  └───────────┘                                      │
++└─────────────────────────────────────────────────────┘
++
++┌─────────────────────────────────────────────────────┐
++│  KeyResult 集約                                     │
++│  ┌───────────┐    ┌──────────────────────┐          │
++│  │ KeyResult │───▶│  KrProgressLog[]     │          │
++│  │  (Root)   │    │  - value / completed │          │
++│  └───────────┘    └──────────────────────┘          │
++└─────────────────────────────────────────────────────┘
++```
++
++### 集約分割の理由
++
++`Objective` と `KeyResult` を別集約にした理由：
++- KRの進捗更新（頻繁）とObjectiveの更新（稀）でトランザクション境界が異なる
++- KRを独立して検索・更新するユースケースが存在する
++- 集約を小さく保つことで、並行更新時のロック競合を減らす
++
++---
++
++## 値オブジェクト（Value Objects）
++
++同一性ではなく **値の等価性** で比較されるオブジェクト。イミュータブルに設計する。
++
++| 値オブジェクト | 説明 | 検証ルール |
++|---|---|---|
++| `UserId` | ユーザーID（UUID） | 有効なUUID形式 |
++| `TeamId` | チームID（UUID） | 有効なUUID形式 |
++| `PeriodId` | 期間ID（UUID） | 有効なUUID形式 |
++| `ObjectiveId` | 目標ID（UUID） | 有効なUUID形式 |
++| `KeyResultId` | KR ID（UUID） | 有効なUUID形式 |
++| `Email` | メールアドレス | RFC5322形式 |
++| `Role` | ロール | `admin` or `member` のみ |
++| `Half` | 上期/下期 | `H1` or `H2` のみ |
++| `NumericProgress` | 数値進捗 | target_value > 0、current_value >= 0 |
++| `CheckboxProgress` | 完了進捗 | true / false |
++| `KeyResultProgress` | KR進捗（Union型） | NumericProgress または CheckboxProgress |
++| `DateRange` | 期間（開始〜終了） | start_date < end_date |
++
++```cpp
++// C++ 実装イメージ（値オブジェクト）
++class Email {
++public:
++    static Result<Email> create(const std::string& value);
++    const std::string& value() const { return value_; }
++    bool operator==(const Email& other) const { return value_ == other.value_; }
++private:
++    explicit Email(std::string value) : value_(std::move(value)) {}
++    std::string value_;
++};
++
++// KrProgressはVariantで型安全に表現
++using KeyResultProgress = std::variant<NumericProgress, CheckboxProgress>;
++```
++
++---
++
++## エンティティ（Entities）
++
++同一性（ID）で識別されるオブジェクト。
++
++| エンティティ | 集約 | 説明 |
++|---|---|---|
++| `User` | User集約ルート | ユーザー |
++| `Team` | Team集約ルート | チーム |
++| `TeamMember` | Team集約内 | チームメンバー（Team経由でのみ操作） |
++| `Period` | Period集約ルート | 半期 |
++| `Objective` | Objective集約ルート | 目標 |
++| `KeyResult` | KeyResult集約ルート | 主要な結果 |
++| `KrProgressLog` | KeyResult集約内 | 進捗ログ（KeyResult経由でのみ操作） |
++
++---
++
++## ドメインサービス（Domain Services）
++
++複数の集約にまたがるビジネスルールを表現する。エンティティや値オブジェクトに収まらないロジックを置く。
++
++### ObjectiveService
++
++```
++責務: Objectiveの作成・検証
++ルール: owner_id が period の team のメンバーであること
++```
++
++```cpp
++class ObjectiveService {
++public:
++    // owner が team のメンバーか検証してから Objective を生成する
++    Result<Objective> createObjective(
++        const TeamId& team_id,
++        const PeriodId& period_id,
++        const UserId& owner_id,
++        const std::string& title
++    );
++};
++```
++
++### KeyResultService
++
++```
++責務: KRの進捗更新
++ルール: 進捗ログを追加し、KR本体の current_value / is_completed を同期する
++```
++
++```cpp
++class KeyResultService {
++public:
++    // ProgressLog を追加し、KeyResult の最新値を更新する
++    Result<void> recordProgress(
++        const KeyResultId& kr_id,
++        const UserId& recorded_by,
++        const KeyResultProgress& progress,
++        const std::optional<std::string>& note
++    );
++};
++```
++
++---
++
++## リポジトリインターフェース（Repository Interfaces）
++
++ドメイン層で定義するインターフェース。実装はインフラ層（PostgreSQL）に置く。
++
++```cpp
++// ドメイン層（純粋仮想クラス）
++class IUserRepository {
++public:
++    virtual ~IUserRepository() = default;
++    virtual Result<User>              findById(const UserId& id) = 0;
++    virtual Result<User>              findByEmail(const Email& email) = 0;
++    virtual Result<void>              save(const User& user) = 0;
++};
++
++class IObjectiveRepository {
++public:
++    virtual ~IObjectiveRepository() = default;
++    virtual Result<Objective>         findById(const ObjectiveId& id) = 0;
++    virtual Result<std::vector<Objective>>
++                                      findByPeriod(const PeriodId& period_id) = 0;
++    virtual Result<void>              save(const Objective& objective) = 0;
++};
++
++class IKeyResultRepository {
++public:
++    virtual ~IKeyResultRepository() = default;
++    virtual Result<KeyResult>         findById(const KeyResultId& id) = 0;
++    virtual Result<std::vector<KeyResult>>
++                                      findByObjective(const ObjectiveId& objective_id) = 0;
++    virtual Result<void>              save(const KeyResult& kr) = 0;
++    virtual Result<void>              saveProgressLog(const KrProgressLog& log) = 0;
++};
++```
++
++---
++
++## クリーンアーキテクチャ レイヤー構成
++
++```
++src/
++├── domain/                 # ドメイン層（外部依存ゼロ）
++│   ├── model/
++│   │   ├── user/
++│   │   │   ├── User.hpp
++│   │   │   ├── UserId.hpp
++│   │   │   └── Email.hpp
++│   │   ├── team/
++│   │   │   ├── Team.hpp
++│   │   │   ├── TeamMember.hpp
++│   │   │   └── Role.hpp
++│   │   ├── period/
++│   │   │   ├── Period.hpp
++│   │   │   ├── Half.hpp
++│   │   │   └── DateRange.hpp
++│   │   ├── objective/
++│   │   │   └── Objective.hpp
++│   │   └── keyresult/
++│   │       ├── KeyResult.hpp
++│   │       ├── KeyResultProgress.hpp   ← std::variant
++│   │       └── KrProgressLog.hpp
++│   ├── service/
++│   │   ├── ObjectiveService.hpp
++│   │   └── KeyResultService.hpp
++│   └── repository/                     # インターフェースのみ
++│       ├── IUserRepository.hpp
++│       ├── IObjectiveRepository.hpp
++│       └── IKeyResultRepository.hpp
++│
++├── application/            # ユースケース層
++│   └── usecase/
++│       ├── CreateObjectiveUseCase.hpp
++│       ├── UpdateKeyResultProgressUseCase.hpp
++│       └── GetPeriodSummaryUseCase.hpp
++│
++├── infrastructure/         # インフラ層（PostgreSQL実装）
++│   └── repository/
++│       ├── PgUserRepository.cpp        ← libpqxx 実装
++│       ├── PgObjectiveRepository.cpp
++│       └── PgKeyResultRepository.cpp
++│
++└── presentation/           # プレゼンテーション層（CLI / API）
++    └── cli/
++        └── main.cpp
++```
++
++---
++
++## 実装順序（推奨）
++
++フェーズ2（ポートフォリオ制作）での実装順序。
++
++```
++1. domain/model の値オブジェクト（UserId, Email, Role, Half...）
++2. domain/model のエンティティ（User, Team, Objective, KeyResult...）
++3. domain/repository のインターフェース定義
++4. infrastructure/repository の libpqxx 実装（Repositoryパターン）
++5. domain/service のドメインサービス
++6. application/usecase のユースケース
++7. presentation/cli の CLI エントリポイント
++```
++
++---
++
++## 関連ファイル
++
++- [`../schema.sql`](../schema.sql) — データベーススキーマ
++- [`../schema.md`](../schema.md) — スキーマ設計書
+diff --git "a/05_DDD\347\265\261\345\220\210/go/.claude/settings.local.json" "b/05_DDD\347\265\261\345\220\210/go/.claude/settings.local.json"
+new file mode 100644
+index 0000000..438b2db
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/.claude/settings.local.json"
+@@ -0,0 +1,8 @@
++{
++  "permissions": {
++    "allow": [
++      "Bash(go run *)",
++      "Bash(go mod *)"
++    ]
++  }
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/go/README.md" "b/05_DDD\347\265\261\345\220\210/go/README.md"
+new file mode 100644
+index 0000000..3244631
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/README.md"
+@@ -0,0 +1,53 @@
++# OKR Repository — Go (pgx) 実装
++
++C++ 実装（libpqxx）と同じドメインモデル・Repository パターンを Go + pgx v5 で実装したサンプル。
++
++## ディレクトリ構成
++
++```
++go/
++├── go.mod
++├── cmd/
++│   └── smoke/
++│       └── main.go                  # スモークテスト
++├── domain/
++│   ├── model/
++│   │   └── user/
++│   │       ├── user_id.go           # 値オブジェクト: UserId
++│   │       ├── email.go             # 値オブジェクト: Email
++│   │       └── user.go              # エンティティ: User（集約ルート）
++│   └── repository/
++│       └── user_repository.go       # インターフェース: UserRepository
++└── infrastructure/
++    └── repository/
++        └── pg_user_repository.go    # pgx 実装: PgUserRepository
++```
++
++## 実行方法（DevContainer 内）
++
++```bash
++cd /workspace/05_DDD統合/go
++
++# 依存解決（初回のみ）
++go mod tidy
++
++# スモークテスト実行
++go run ./cmd/smoke
++```
++
++## C++ 実装との対応
++
++| C++                         | Go                             |
++|-----------------------------|--------------------------------|
++| `Result<T>`                 | `(T, error)` の多値返却        |
++| `std::optional<T>`          | `*T`（nilポインタ）            |
++| `pqxx::connection`          | `pgxpool.Pool`                 |
++| `tx.exec_params(...)`       | `pool.Exec(ctx, q, args...)`   |
++| `ON CONFLICT DO UPDATE`     | 同じ（SQL は共通）             |
++
++## 設計上のポイント
++
++- ドメイン層（`domain/`）は `pgx` に一切依存しない
++- インターフェース（`UserRepository`）はドメイン層に定義し、実装はインフラ層に置く
++- `scanUser()` で DB 行 → エンティティの再構築を集約する
++- `pgxpool.Pool` を使ってコネクションプールを共有する
+diff --git "a/05_DDD\347\265\261\345\220\210/go/cmd/smoke/main.go" "b/05_DDD\347\265\261\345\220\210/go/cmd/smoke/main.go"
+new file mode 100644
+index 0000000..93b4815
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/cmd/smoke/main.go"
+@@ -0,0 +1,143 @@
++// smoke — PgUserRepository の動作確認スクリプト
++//
++// DevContainer 内での実行:
++//
++//	cd /workspace/05_DDD統合/go
++//	go run ./cmd/smoke
++//
++// 環境変数 DATABASE_URL が設定されていない場合は既定の接続文字列を使用する。
++package main
++
++import (
++	"context"
++	"fmt"
++	"log"
++	"os"
++	"time"
++
++	"github.com/jackc/pgx/v5/pgxpool"
++
++	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
++	infrarepo "github.com/tsuzudev05/rdb-learning-postgres/okr/infrastructure/repository"
++)
++
++const defaultDSN = "postgresql://postgres:pass@postgres:5432/learning"
++
++func connString() string {
++	if url := os.Getenv("DATABASE_URL"); url != "" {
++		return url
++	}
++	return defaultDSN
++}
++
++func main() {
++	ctx := context.Background()
++
++	fmt.Println("========================================")
++	fmt.Println(" OKR Repository スモークテスト (Go/pgx)")
++	fmt.Println("========================================")
++
++	pool, err := pgxpool.New(ctx, connString())
++	if err != nil {
++		log.Fatalf("DB接続失敗: %v", err)
++	}
++	defer pool.Close()
++
++	// 1. 疎通確認
++	testConnection(ctx, pool)
++
++	// 2. UserRepository CRUD
++	testUserRepository(ctx, pool)
++
++	fmt.Println("========================================")
++	fmt.Println(" ✅ 全テスト PASSED")
++	fmt.Println("========================================")
++}
++
++// ─── test helpers ────────────────────────────────────────────────────────────
++
++func must(label string, err error) {
++	if err != nil {
++		log.Fatalf("❌ %s: %v", label, err)
++	}
++}
++
++func testConnection(ctx context.Context, pool *pgxpool.Pool) {
++	fmt.Print("[1] DB 接続確認... ")
++	var dbName string
++	err := pool.QueryRow(ctx, "SELECT current_database()").Scan(&dbName)
++	must("DB接続確認", err)
++	fmt.Printf("✅  DB=%s\n", dbName)
++}
++
++func testUserRepository(ctx context.Context, pool *pgxpool.Pool) {
++	repo := infrarepo.NewPgUserRepository(pool)
++
++	const uuid = "22222222-2222-4222-a222-222222222222"
++	id, err := user.NewUserId(uuid)
++	must("NewUserId", err)
++	email, err := user.NewEmail("gosmoke@example.com")
++	must("NewEmail", err)
++
++	// クリーンアップ（冪等）
++	must("remove(pre-cleanup)", repo.Remove(ctx, id))
++
++	// save（新規）
++	fmt.Print("[2] Save (新規)... ")
++	u, err := user.NewUser(id, "スモーク太郎Go", email, "hash_go_xxx", time.Time{}, time.Time{})
++	must("NewUser", err)
++	must("Save(new)", repo.Save(ctx, u))
++	fmt.Println("✅")
++
++	// FindByID
++	fmt.Print("[3] FindByID... ")
++	found, err := repo.FindByID(ctx, id)
++	must("FindByID", err)
++	if found == nil {
++		log.Fatal("❌ FindByID: ユーザーが見つかりません")
++	}
++	if found.Name() != "スモーク太郎Go" {
++		log.Fatalf("❌ FindByID: 名前が一致しません: %s", found.Name())
++	}
++	fmt.Printf("✅  name=%s\n", found.Name())
++
++	// Save（upsert 更新）
++	fmt.Print("[4] Save (更新)... ")
++	updated, err := user.NewUser(id, "スモーク太郎Go更新済み", email, "hash_go_yyy", time.Time{}, time.Time{})
++	must("NewUser(update)", err)
++	must("Save(update)", repo.Save(ctx, updated))
++	confirmed, err := repo.FindByID(ctx, id)
++	must("FindByID(after update)", err)
++	if confirmed == nil || confirmed.Name() != "スモーク太郎Go更新済み" {
++		log.Fatalf("❌ Save(update): 更新が反映されていません")
++	}
++	fmt.Printf("✅  name=%s\n", confirmed.Name())
++
++	// FindByEmail
++	fmt.Print("[5] FindByEmail... ")
++	byEmail, err := repo.FindByEmail(ctx, email)
++	must("FindByEmail", err)
++	if byEmail == nil || !byEmail.ID().Equal(id) {
++		log.Fatal("❌ FindByEmail: IDが一致しません")
++	}
++	fmt.Println("✅")
++
++	// FindAll
++	fmt.Print("[6] FindAll... ")
++	all, err := repo.FindAll(ctx)
++	must("FindAll", err)
++	if len(all) == 0 {
++		log.Fatal("❌ FindAll: 結果が0件です")
++	}
++	fmt.Printf("✅  count=%d\n", len(all))
++
++	// Remove
++	fmt.Print("[7] Remove... ")
++	must("Remove", repo.Remove(ctx, id))
++	gone, err := repo.FindByID(ctx, id)
++	must("FindByID(after remove)", err)
++	if gone != nil {
++		log.Fatal("❌ Remove: 削除後もユーザーが存在します")
++	}
++	fmt.Println("✅")
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/go/domain/model/user/email.go" "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/email.go"
+new file mode 100644
+index 0000000..7f46e6c
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/email.go"
+@@ -0,0 +1,33 @@
++package user
++
++import (
++	"fmt"
++	"regexp"
++	"strings"
++)
++
++// emailRegex performs a simplified RFC5322 check.
++var emailRegex = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
++
++// Email is a value object representing a validated, lowercase email address.
++type Email struct {
++	value string
++}
++
++// NewEmail validates and normalises the email (lowercased).
++func NewEmail(value string) (Email, error) {
++	lower := strings.ToLower(strings.TrimSpace(value))
++	if !emailRegex.MatchString(lower) {
++		return Email{}, fmt.Errorf("Email: 無効なメールアドレスです: %s", value)
++	}
++	return Email{value: lower}, nil
++}
++
++// Value returns the normalised email string.
++func (e Email) Value() string { return e.value }
++
++// Equal returns true if two Emails have the same value.
++func (e Email) Equal(other Email) bool { return e.value == other.value }
++
++// String implements fmt.Stringer.
++func (e Email) String() string { return e.value }
+diff --git "a/05_DDD\347\265\261\345\220\210/go/domain/model/user/errors.go" "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/errors.go"
+new file mode 100644
+index 0000000..1d52e8c
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/errors.go"
+@@ -0,0 +1,8 @@
++package user
++
++import "fmt"
++
++// errorf is a local helper so callers in this package don't import fmt.
++func errorf(format string, args ...any) error {
++	return fmt.Errorf(format, args...)
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/go/domain/model/user/user.go" "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/user.go"
+new file mode 100644
+index 0000000..c4078c2
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/user.go"
+@@ -0,0 +1,55 @@
++package user
++
++import "time"
++
++// User is the aggregate root for the User aggregate.
++// Immutable after construction — use factory function only.
++type User struct {
++	id           UserId
++	name         string
++	email        Email
++	passwordHash string
++	createdAt    time.Time
++	updatedAt    time.Time
++}
++
++// NewUser constructs a User entity.
++// createdAt / updatedAt are optional (zero value = not yet persisted).
++func NewUser(
++	id UserId,
++	name string,
++	email Email,
++	passwordHash string,
++	createdAt time.Time,
++	updatedAt time.Time,
++) (User, error) {
++	if name == "" {
++		return User{}, errorf("User: 氏名は空にできません")
++	}
++	return User{
++		id:           id,
++		name:         name,
++		email:        email,
++		passwordHash: passwordHash,
++		createdAt:    createdAt,
++		updatedAt:    updatedAt,
++	}, nil
++}
++
++// ID returns the user's unique identifier.
++func (u User) ID() UserId { return u.id }
++
++// Name returns the user's display name.
++func (u User) Name() string { return u.name }
++
++// Email returns the user's email value object.
++func (u User) Email() Email { return u.email }
++
++// PasswordHash returns the stored password hash.
++func (u User) PasswordHash() string { return u.passwordHash }
++
++// CreatedAt returns the creation timestamp (zero if not persisted).
++func (u User) CreatedAt() time.Time { return u.createdAt }
++
++// UpdatedAt returns the last update timestamp (zero if not persisted).
++func (u User) UpdatedAt() time.Time { return u.updatedAt }
+diff --git "a/05_DDD\347\265\261\345\220\210/go/domain/model/user/user_id.go" "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/user_id.go"
+new file mode 100644
+index 0000000..3e1e58c
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/domain/model/user/user_id.go"
+@@ -0,0 +1,35 @@
++// Package user contains domain model types for the User aggregate.
++package user
++
++import (
++	"fmt"
++	"regexp"
++)
++
++// uuidV4Regex matches UUID v4 format.
++var uuidV4Regex = regexp.MustCompile(
++	`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
++)
++
++// UserId is a value object representing a user's unique identifier (UUID v4).
++// Constructed only via Create() to enforce validation.
++type UserId struct {
++	value string
++}
++
++// NewUserId creates a UserId after validating the UUID v4 format.
++func NewUserId(value string) (UserId, error) {
++	if !uuidV4Regex.MatchString(value) {
++		return UserId{}, fmt.Errorf("UserId: 無効なUUID形式です: %s", value)
++	}
++	return UserId{value: value}, nil
++}
++
++// Value returns the raw UUID string.
++func (u UserId) Value() string { return u.value }
++
++// Equal returns true if two UserIds have the same value.
++func (u UserId) Equal(other UserId) bool { return u.value == other.value }
++
++// String implements fmt.Stringer.
++func (u UserId) String() string { return u.value }
+diff --git "a/05_DDD\347\265\261\345\220\210/go/domain/repository/user_repository.go" "b/05_DDD\347\265\261\345\220\210/go/domain/repository/user_repository.go"
+new file mode 100644
+index 0000000..ad32159
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/domain/repository/user_repository.go"
+@@ -0,0 +1,28 @@
++// Package repository defines Repository interfaces for the domain layer.
++// No infrastructure dependencies are allowed here.
++package repository
++
++import (
++	"context"
++
++	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
++)
++
++// UserRepository defines persistence operations for the User aggregate.
++// Implementations live in the infrastructure layer.
++type UserRepository interface {
++	// FindByID returns the user with the given ID, or (nil, nil) if not found.
++	FindByID(ctx context.Context, id user.UserId) (*user.User, error)
++
++	// FindByEmail returns the user with the given email, or (nil, nil) if not found.
++	FindByEmail(ctx context.Context, email user.Email) (*user.User, error)
++
++	// FindAll returns all users ordered by creation date (ascending).
++	FindAll(ctx context.Context) ([]user.User, error)
++
++	// Save persists the user (INSERT ... ON CONFLICT DO UPDATE).
++	Save(ctx context.Context, u user.User) error
++
++	// Remove deletes the user by ID. No-op if the user does not exist.
++	Remove(ctx context.Context, id user.UserId) error
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/go/go.mod" "b/05_DDD\347\265\261\345\220\210/go/go.mod"
+new file mode 100644
+index 0000000..85f76f1
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/go.mod"
+@@ -0,0 +1,14 @@
++module github.com/tsuzudev05/rdb-learning-postgres/okr
++
++go 1.22
++
++require github.com/jackc/pgx/v5 v5.5.5
++
++require (
++	github.com/jackc/pgpassfile v1.0.0 // indirect
++	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
++	github.com/jackc/puddle/v2 v2.2.1 // indirect
++	golang.org/x/crypto v0.17.0 // indirect
++	golang.org/x/sync v0.1.0 // indirect
++	golang.org/x/text v0.14.0 // indirect
++)
+diff --git "a/05_DDD\347\265\261\345\220\210/go/infrastructure/repository/pg_user_repository.go" "b/05_DDD\347\265\261\345\220\210/go/infrastructure/repository/pg_user_repository.go"
+new file mode 100644
+index 0000000..5e995c9
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/go/infrastructure/repository/pg_user_repository.go"
+@@ -0,0 +1,168 @@
++// Package repository provides PostgreSQL implementations of domain repository interfaces.
++package repository
++
++import (
++	"context"
++	"fmt"
++	"time"
++
++	"github.com/jackc/pgx/v5"
++	"github.com/jackc/pgx/v5/pgxpool"
++
++	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
++	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
++)
++
++// Compile-time check: PgUserRepository must satisfy UserRepository.
++var _ domainrepo.UserRepository = (*PgUserRepository)(nil)
++
++// PgUserRepository is the PostgreSQL (pgx) implementation of UserRepository.
++//
++// SQL policy:
++//   - Save():   INSERT ... ON CONFLICT (id) DO UPDATE SET ... (upsert)
++//   - Remove(): DELETE; no-op when the row does not exist
++//   - Timestamps (created_at / updated_at) are managed by DB DEFAULT / trigger
++type PgUserRepository struct {
++	pool *pgxpool.Pool
++}
++
++// NewPgUserRepository creates a new PgUserRepository backed by the given connection pool.
++func NewPgUserRepository(pool *pgxpool.Pool) *PgUserRepository {
++	return &PgUserRepository{pool: pool}
++}
++
++// ─── FindByID ───────────────────────────────────────────────────────────────
++
++func (r *PgUserRepository) FindByID(ctx context.Context, id user.UserId) (*user.User, error) {
++	const q = `
++		SELECT id, name, email, password_hash, created_at, updated_at
++		FROM users
++		WHERE id = $1`
++
++	row := r.pool.QueryRow(ctx, q, id.Value())
++	u, err := scanUser(row)
++	if err == pgx.ErrNoRows {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, fmt.Errorf("PgUserRepository.FindByID: %w", err)
++	}
++	return u, nil
++}
++
++// ─── FindByEmail ────────────────────────────────────────────────────────────
++
++func (r *PgUserRepository) FindByEmail(ctx context.Context, email user.Email) (*user.User, error) {
++	const q = `
++		SELECT id, name, email, password_hash, created_at, updated_at
++		FROM users
++		WHERE email = $1`
++
++	row := r.pool.QueryRow(ctx, q, email.Value())
++	u, err := scanUser(row)
++	if err == pgx.ErrNoRows {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, fmt.Errorf("PgUserRepository.FindByEmail: %w", err)
++	}
++	return u, nil
++}
++
++// ─── FindAll ────────────────────────────────────────────────────────────────
++
++func (r *PgUserRepository) FindAll(ctx context.Context) ([]user.User, error) {
++	const q = `
++		SELECT id, name, email, password_hash, created_at, updated_at
++		FROM users
++		ORDER BY created_at ASC`
++
++	rows, err := r.pool.Query(ctx, q)
++	if err != nil {
++		return nil, fmt.Errorf("PgUserRepository.FindAll: %w", err)
++	}
++	defer rows.Close()
++
++	var users []user.User
++	for rows.Next() {
++		u, err := scanUser(rows)
++		if err != nil {
++			return nil, fmt.Errorf("PgUserRepository.FindAll (scan): %w", err)
++		}
++		users = append(users, *u)
++	}
++	if err := rows.Err(); err != nil {
++		return nil, fmt.Errorf("PgUserRepository.FindAll (rows): %w", err)
++	}
++	return users, nil
++}
++
++// ─── Save (upsert) ──────────────────────────────────────────────────────────
++
++func (r *PgUserRepository) Save(ctx context.Context, u user.User) error {
++	const q = `
++		INSERT INTO users (id, name, email, password_hash)
++		VALUES ($1, $2, $3, $4)
++		ON CONFLICT (id) DO UPDATE SET
++			name          = EXCLUDED.name,
++			email         = EXCLUDED.email,
++			password_hash = EXCLUDED.password_hash`
++
++	_, err := r.pool.Exec(ctx, q,
++		u.ID().Value(),
++		u.Name(),
++		u.Email().Value(),
++		u.PasswordHash(),
++	)
++	if err != nil {
++		return fmt.Errorf("PgUserRepository.Save: %w", err)
++	}
++	return nil
++}
++
++// ─── Remove ─────────────────────────────────────────────────────────────────
++
++func (r *PgUserRepository) Remove(ctx context.Context, id user.UserId) error {
++	const q = `DELETE FROM users WHERE id = $1`
++	_, err := r.pool.Exec(ctx, q, id.Value())
++	if err != nil {
++		return fmt.Errorf("PgUserRepository.Remove: %w", err)
++	}
++	return nil
++}
++
++// ─── helpers ────────────────────────────────────────────────────────────────
++
++// scanner is satisfied by both pgx.Row and pgx.Rows.
++type scanner interface {
++	Scan(dest ...any) error
++}
++
++// scanUser reads one row into a User entity.
++func scanUser(s scanner) (*user.User, error) {
++	var (
++		rawID    string
++		name     string
++		rawEmail string
++		hash     string
++		created  time.Time
++		updated  time.Time
++	)
++	if err := s.Scan(&rawID, &name, &rawEmail, &hash, &created, &updated); err != nil {
++		return nil, err
++	}
++
++	id, err := user.NewUserId(rawID)
++	if err != nil {
++		return nil, err
++	}
++	email, err := user.NewEmail(rawEmail)
++	if err != nil {
++		return nil, err
++	}
++	u, err := user.NewUser(id, name, email, hash, created, updated)
++	if err != nil {
++		return nil, err
++	}
++	return &u, nil
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/schema.md" "b/05_DDD\347\265\261\345\220\210/schema.md"
+new file mode 100644
+index 0000000..6acbe2f
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/schema.md"
+@@ -0,0 +1,192 @@
++# DBスキーマ設計書
++
++OKR管理ツール（C++ × TypeScript × PostgreSQL）のデータベース設計。  
++DDD / クリーンアーキテクチャに対応した設計とする。
++
++---
++
++## テーブル一覧
++
++| テーブル名 | DDD位置付け | 概要 |
++|---|---|---|
++| `users` | 集約ルート: User | ユーザー |
++| `teams` | 集約ルート: Team | チーム |
++| `team_members` | Team集約内エンティティ | チームメンバー・ロール管理 |
++| `periods` | 集約ルート: Period | 半期（OKRサイクル単位） |
++| `objectives` | 集約ルート: Objective | 目標（OのO） |
++| `key_results` | 集約ルート: KeyResult | 主要な結果（KR） |
++| `kr_progress_logs` | KeyResult集約内エンティティ | 進捗履歴（時系列） |
++
++---
++
++## テーブル詳細
++
++### users
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | ユーザーID |
++| name | VARCHAR(100) | NOT NULL | 氏名 |
++| email | VARCHAR(255) | NOT NULL, UNIQUE | メールアドレス |
++| password_hash | VARCHAR(255) | NOT NULL | ハッシュ化済みパスワード |
++| created_at | TIMESTAMPTZ | NOT NULL | 作成日時 |
++| updated_at | TIMESTAMPTZ | NOT NULL | 更新日時 |
++
++---
++
++### teams
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | チームID |
++| name | VARCHAR(100) | NOT NULL | チーム名 |
++| description | TEXT | - | 説明 |
++| created_at | TIMESTAMPTZ | NOT NULL | 作成日時 |
++| updated_at | TIMESTAMPTZ | NOT NULL | 更新日時 |
++
++---
++
++### team_members
++
++チームとユーザーの中間テーブル。`role` により管理者とメンバーを区別する。
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | - |
++| team_id | UUID | FK → teams | チームID |
++| user_id | UUID | FK → users | ユーザーID |
++| role | VARCHAR(20) | CHECK: admin\|member | ロール |
++| joined_at | TIMESTAMPTZ | NOT NULL | 参加日時 |
++
++**UNIQUE制約**：`(team_id, user_id)`
++
++---
++
++### periods
++
++半期単位のOKRサイクルを管理する。
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | 期間ID |
++| team_id | UUID | FK → teams | 対象チーム |
++| name | VARCHAR(50) | NOT NULL | 例: `2025-H1` |
++| half | VARCHAR(2) | CHECK: H1\|H2 | 上期 / 下期 |
++| start_date | DATE | NOT NULL | 開始日 |
++| end_date | DATE | NOT NULL | 終了日 |
++| created_at | TIMESTAMPTZ | NOT NULL | 作成日時 |
++| updated_at | TIMESTAMPTZ | NOT NULL | 更新日時 |
++
++**CHECK制約**：`start_date < end_date`
++
++---
++
++### objectives
++
++OKRの「O（目標）」。`owner_id` が対象チームのメンバーかどうかは **ドメインサービス層で検証** する。
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | 目標ID |
++| period_id | UUID | FK → periods | 対象期間 |
++| owner_id | UUID | FK → users | 目標オーナー |
++| title | VARCHAR(255) | NOT NULL | 目標タイトル |
++| description | TEXT | - | 詳細説明 |
++| display_order | INT | NOT NULL | UI表示順 |
++| created_at | TIMESTAMPTZ | NOT NULL | 作成日時 |
++| updated_at | TIMESTAMPTZ | NOT NULL | 更新日時 |
++
++---
++
++### key_results
++
++OKRの「KR（主要な結果）」。`kr_type` により数値管理とチェックボックス管理を切り替える。
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | KR ID |
++| objective_id | UUID | FK → objectives | 親目標 |
++| owner_id | UUID | FK → users | KRオーナー |
++| title | VARCHAR(255) | NOT NULL | KRタイトル |
++| kr_type | VARCHAR(20) | CHECK: numeric\|checkbox | 進捗種別 |
++| target_value | NUMERIC | nullable | 目標値（numeric のみ） |
++| current_value | NUMERIC | nullable | 現在値（numeric のみ） |
++| is_completed | BOOLEAN | NOT NULL | 完了フラグ（checkbox のみ） |
++| display_order | INT | NOT NULL | UI表示順 |
++| created_at | TIMESTAMPTZ | NOT NULL | 作成日時 |
++| updated_at | TIMESTAMPTZ | NOT NULL | 更新日時 |
++
++**CHECK制約**：`kr_type = 'numeric'` の場合 `target_value IS NOT NULL`
++
++---
++
++### kr_progress_logs
++
++KRの進捗を時系列で記録する。KR本体は最新値のみ保持し、履歴はこのテーブルに積む。
++
++| カラム | 型 | 制約 | 説明 |
++|---|---|---|---|
++| id | UUID | PK | ログID |
++| key_result_id | UUID | FK → key_results | 対象KR |
++| recorded_by | UUID | FK → users | 記録者 |
++| value | NUMERIC | nullable | 数値進捗（numeric のみ） |
++| completed | BOOLEAN | nullable | 完了フラグ（checkbox のみ） |
++| note | TEXT | - | コメント |
++| recorded_at | TIMESTAMPTZ | NOT NULL | 記録日時 |
++
++---
++
++## インデックス一覧
++
++| インデックス名 | 対象 | 目的 |
++|---|---|---|
++| idx_team_members_team_id | team_members(team_id) | チーム別メンバー検索 |
++| idx_team_members_user_id | team_members(user_id) | ユーザー別チーム検索 |
++| idx_periods_team_id | periods(team_id) | チーム別期間検索 |
++| idx_objectives_period_id | objectives(period_id) | 期間別目標検索 |
++| idx_objectives_owner_id | objectives(owner_id) | オーナー別目標検索 |
++| idx_key_results_objective_id | key_results(objective_id) | 目標別KR検索 |
++| idx_kr_progress_logs_kr_id | kr_progress_logs(key_result_id) | KR別履歴検索 |
++| idx_kr_progress_logs_recorded | kr_progress_logs(recorded_at) | 時系列検索 |
++
++---
++
++## 設計上の注意点
++
++### kr_type によるドメイン分岐
++
++`kr_type` の `numeric` / `checkbox` の切り替えはアプリケーション層・ドメイン層で処理する。  
++DBレベルではCHECK制約と `nullable` で整合性を保ち、C++のドメイン層では `std::variant` を用いた値オブジェクトで表現する。
++
++```cpp
++// ドメイン層での表現例（C++）
++class KeyResultProgress {
++  std::variant<NumericProgress, CheckboxProgress> value_;
++};
++```
++
++### owner_id の整合性はドメインサービスが保証
++
++`objectives.owner_id` と `key_results.owner_id` が対象チームのメンバーであるかどうかは、  
++外部キー制約では表現できないため **ドメインサービス層で検証** する。
++
++```cpp
++// ドメインサービス例（C++）
++class ObjectiveService {
++public:
++  Result<Objective> create(TeamId team_id, UserId owner_id, PeriodId period_id, ...);
++  // owner_id が team_id のメンバーか検証してから Repository に渡す
++};
++```
++
++### updated_at の自動更新
++
++PostgreSQLトリガー `update_updated_at()` により、更新時に自動セットされる。  
++アプリケーション層での手動セットは不要。
++
++---
++
++## 関連ファイル
++
++- [`schema.sql`](./schema.sql) — CREATE TABLE 本体
++- [`docs/domain-model.md`](./docs/domain-model.md) — ドメインモデル・集約設計
+diff --git "a/05_DDD\347\265\261\345\220\210/schema.sql" "b/05_DDD\347\265\261\345\220\210/schema.sql"
+new file mode 100644
+index 0000000..c45e51b
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/schema.sql"
+@@ -0,0 +1,202 @@
++-- =============================================================================
++-- OKR Management Tool - Database Schema
++-- =============================================================================
++-- DDD / Clean Architecture 対応
++-- PostgreSQL 16
++-- =============================================================================
++
++-- -----------------------------------------------------------------------------
++-- Extensions
++-- -----------------------------------------------------------------------------
++CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
++
++-- -----------------------------------------------------------------------------
++-- users
++-- 集約ルート: User
++-- -----------------------------------------------------------------------------
++CREATE TABLE users (
++    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    name            VARCHAR(100) NOT NULL,
++    email           VARCHAR(255) NOT NULL UNIQUE,
++    password_hash   VARCHAR(255) NOT NULL,
++    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++COMMENT ON TABLE  users              IS 'ユーザー（集約ルート: User）';
++COMMENT ON COLUMN users.id           IS 'ユーザーID（UserId値オブジェクト）';
++COMMENT ON COLUMN users.email        IS 'メールアドレス（一意制約）';
++COMMENT ON COLUMN users.password_hash IS 'ハッシュ化済みパスワード';
++
++-- -----------------------------------------------------------------------------
++-- teams
++-- 集約ルート: Team
++-- -----------------------------------------------------------------------------
++CREATE TABLE teams (
++    id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    name        VARCHAR(100) NOT NULL,
++    description TEXT,
++    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++COMMENT ON TABLE  teams             IS 'チーム（集約ルート: Team）';
++COMMENT ON COLUMN teams.id          IS 'チームID（TeamId値オブジェクト）';
++
++-- -----------------------------------------------------------------------------
++-- team_members
++-- エンティティ: TeamMember（Team集約内）
++-- team × user の中間テーブル。role によりドメインルールを区別する。
++-- -----------------------------------------------------------------------------
++CREATE TABLE team_members (
++    id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    team_id     UUID        NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
++    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
++    role        VARCHAR(20) NOT NULL DEFAULT 'member'
++                    CHECK (role IN ('admin', 'member')),
++    joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    UNIQUE (team_id, user_id)
++);
++
++COMMENT ON TABLE  team_members          IS 'チームメンバー（Team集約内エンティティ）';
++COMMENT ON COLUMN team_members.role     IS 'ロール: admin | member';
++COMMENT ON COLUMN team_members.team_id  IS 'Team集約ルートへの参照';
++
++-- -----------------------------------------------------------------------------
++-- periods
++-- 集約ルート: Period（半期単位の OKR サイクル）
++-- -----------------------------------------------------------------------------
++CREATE TABLE periods (
++    id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    team_id     UUID        NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
++    name        VARCHAR(50) NOT NULL,           -- 例: "2025-H1"
++    half        VARCHAR(2)  NOT NULL
++                    CHECK (half IN ('H1', 'H2')),
++    start_date  DATE        NOT NULL,
++    end_date    DATE        NOT NULL,
++    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    CHECK (start_date < end_date)
++);
++
++COMMENT ON TABLE  periods            IS '半期（集約ルート: Period）';
++COMMENT ON COLUMN periods.half       IS '上期 H1 / 下期 H2';
++COMMENT ON COLUMN periods.team_id    IS 'どのチームの期間か';
++
++-- -----------------------------------------------------------------------------
++-- objectives
++-- 集約ルート: Objective（OKR の O）
++-- owner_id がそのチームのメンバーかはドメインサービス層で検証する。
++-- -----------------------------------------------------------------------------
++CREATE TABLE objectives (
++    id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    period_id     UUID        NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
++    owner_id      UUID        NOT NULL REFERENCES users(id),
++    title         VARCHAR(255) NOT NULL,
++    description   TEXT,
++    display_order INT         NOT NULL DEFAULT 0,
++    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++COMMENT ON TABLE  objectives               IS '目標（集約ルート: Objective）';
++COMMENT ON COLUMN objectives.owner_id      IS 'オーナーUser。チームメンバー整合性はドメインサービスで保証';
++COMMENT ON COLUMN objectives.display_order IS 'UI上の表示順（ドラッグ並び替え対応）';
++
++-- -----------------------------------------------------------------------------
++-- key_results
++-- 集約ルート: KeyResult（OKR の KR）
++-- kr_type により NumericProgress / CheckboxProgress に分岐。
++-- target_value / current_value は kr_type='checkbox' の場合 NULL を許容。
++-- -----------------------------------------------------------------------------
++CREATE TABLE key_results (
++    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    objective_id    UUID        NOT NULL REFERENCES objectives(id) ON DELETE CASCADE,
++    owner_id        UUID        NOT NULL REFERENCES users(id),
++    title           VARCHAR(255) NOT NULL,
++    kr_type         VARCHAR(20) NOT NULL
++                        CHECK (kr_type IN ('numeric', 'checkbox')),
++    -- numeric 型のみ使用
++    target_value    NUMERIC,
++    current_value   NUMERIC,
++    -- checkbox 型のみ使用
++    is_completed    BOOLEAN     NOT NULL DEFAULT FALSE,
++    display_order   INT         NOT NULL DEFAULT 0,
++    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    -- numeric の場合 target_value は必須
++    CHECK (
++        (kr_type = 'numeric' AND target_value IS NOT NULL)
++        OR kr_type = 'checkbox'
++    )
++);
++
++COMMENT ON TABLE  key_results                  IS '主要な結果（集約ルート: KeyResult）';
++COMMENT ON COLUMN key_results.kr_type          IS '進捗種別: numeric（数値） | checkbox（完了フラグ）';
++COMMENT ON COLUMN key_results.target_value     IS '目標値。kr_type=numeric のみ使用';
++COMMENT ON COLUMN key_results.current_value    IS '現在値。kr_type=numeric のみ使用';
++COMMENT ON COLUMN key_results.is_completed     IS '完了フラグ。kr_type=checkbox のみ使用';
++COMMENT ON COLUMN key_results.display_order    IS 'UI上の表示順';
++
++-- -----------------------------------------------------------------------------
++-- kr_progress_logs
++-- エンティティ: KrProgressLog（KeyResult集約内）
++-- 進捗の時系列履歴。KeyResult 本体は最新値のみ保持する。
++-- -----------------------------------------------------------------------------
++CREATE TABLE kr_progress_logs (
++    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
++    key_result_id   UUID        NOT NULL REFERENCES key_results(id) ON DELETE CASCADE,
++    recorded_by     UUID        NOT NULL REFERENCES users(id),
++    value           NUMERIC,                -- numeric 型 KR の記録値
++    completed       BOOLEAN,               -- checkbox 型 KR の記録値
++    note            TEXT,
++    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++COMMENT ON TABLE  kr_progress_logs               IS '進捗履歴（KeyResult集約内エンティティ）';
++COMMENT ON COLUMN kr_progress_logs.value         IS '数値進捗。kr_type=numeric のみ';
++COMMENT ON COLUMN kr_progress_logs.completed     IS '完了フラグ。kr_type=checkbox のみ';
++COMMENT ON COLUMN kr_progress_logs.recorded_by   IS '記録者（UserId）';
++
++-- -----------------------------------------------------------------------------
++-- Indexes
++-- -----------------------------------------------------------------------------
++CREATE INDEX idx_team_members_team_id       ON team_members(team_id);
++CREATE INDEX idx_team_members_user_id       ON team_members(user_id);
++CREATE INDEX idx_periods_team_id            ON periods(team_id);
++CREATE INDEX idx_objectives_period_id       ON objectives(period_id);
++CREATE INDEX idx_objectives_owner_id        ON objectives(owner_id);
++CREATE INDEX idx_key_results_objective_id   ON key_results(objective_id);
++CREATE INDEX idx_kr_progress_logs_kr_id     ON kr_progress_logs(key_result_id);
++CREATE INDEX idx_kr_progress_logs_recorded  ON kr_progress_logs(recorded_at);
++
++-- -----------------------------------------------------------------------------
++-- updated_at 自動更新トリガー
++-- -----------------------------------------------------------------------------
++CREATE OR REPLACE FUNCTION update_updated_at()
++RETURNS TRIGGER AS $$
++BEGIN
++    NEW.updated_at = NOW();
++    RETURN NEW;
++END;
++$$ LANGUAGE plpgsql;
++
++CREATE TRIGGER trg_users_updated_at
++    BEFORE UPDATE ON users
++    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
++
++CREATE TRIGGER trg_teams_updated_at
++    BEFORE UPDATE ON teams
++    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
++
++CREATE TRIGGER trg_periods_updated_at
++    BEFORE UPDATE ON periods
++    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
++
++CREATE TRIGGER trg_objectives_updated_at
++    BEFORE UPDATE ON objectives
++    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
++
++CREATE TRIGGER trg_key_results_updated_at
++    BEFORE UPDATE ON key_results
++    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+diff --git "a/05_DDD\347\265\261\345\220\210/src/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/application/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/application/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/application/usecase/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/application/usecase/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/common/Result.hpp" "b/05_DDD\347\265\261\345\220\210/src/common/Result.hpp"
+new file mode 100644
+index 0000000..73efc74
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/common/Result.hpp"
+@@ -0,0 +1,86 @@
++#pragma once
++
++#include <stdexcept>
++#include <string>
++#include <variant>
++
++// Result<T> -- domain layer error handling type
++// Self-implementation of std::expected (C++23). No external dependencies.
++//
++// Design notes:
++//   - static ok() / err() factories use in_place construction to avoid
++//     requiring T to be default-constructible (important for value objects
++//     whose constructors are private).
++//   - Result<void> specialization: C++ does not allow a static and non-static
++//     member function with the same name, so instance ok() is omitted;
++//     use operator bool() to check success instead.
++
++struct DomainError {
++    std::string message;
++    explicit DomainError(std::string msg) : message(std::move(msg)) {}
++};
++
++// Result<T> -- holds success value or DomainError
++template <typename T>
++class Result {
++public:
++    static Result ok(T value) {
++        return Result{std::variant<T, DomainError>{
++            std::in_place_type<T>, std::move(value)}};
++    }
++
++    static Result err(std::string message) {
++        return Result{std::variant<T, DomainError>{
++            std::in_place_type<DomainError>, std::move(message)}};
++    }
++
++    bool ok() const {
++        return std::holds_alternative<T>(storage_);
++    }
++    explicit operator bool() const { return ok(); }
++
++    const T& value() const {
++        if (!ok()) throw std::logic_error("Result is error: " + error());
++        return std::get<T>(storage_);
++    }
++    T& value() {
++        if (!ok()) throw std::logic_error("Result is error: " + error());
++        return std::get<T>(storage_);
++    }
++
++    const std::string& error() const {
++        return std::get<DomainError>(storage_).message;
++    }
++
++private:
++    explicit Result(std::variant<T, DomainError> storage)
++        : storage_(std::move(storage)) {}
++
++    std::variant<T, DomainError> storage_;
++};
++
++// Result<void> -- success or DomainError (no value variant)
++template <>
++class Result<void> {
++public:
++    static Result ok() {
++        Result r;
++        r.success_ = true;
++        return r;
++    }
++
++    static Result err(std::string message) {
++        Result r;
++        r.success_ = false;
++        r.error_message_ = std::move(message);
++        return r;
++    }
++
++    explicit operator bool() const { return success_; }
++
++    const std::string& error() const { return error_message_; }
++
++private:
++    bool        success_       = false;
++    std::string error_message_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/common/UuidId.hpp" "b/05_DDD\347\265\261\345\220\210/src/common/UuidId.hpp"
+new file mode 100644
+index 0000000..54d1d56
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/common/UuidId.hpp"
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <string>
++#include <regex>
++#include "Result.hpp"
++
++// =============================================================================
++// UuidId<Tag> — UUID v4 に基づく型安全な ID 値オブジェクト テンプレート
++//
++// 各エンティティの ID はタグ型でパラメータ化することで、
++// 同じ UUID 形式でも TeamId と UserId を混在させてしまうコンパイルエラーを防ぐ。
++//
++// 使い方:
++//   struct TeamTag {};
++//   using TeamId = UuidId<TeamTag>;
++//
++//   auto result = TeamId::create("550e8400-e29b-41d4-a716-446655440000");
++//   if (!result) { /* エラー */ }
++//   TeamId id = result.value();
++// =============================================================================
++template <typename Tag>
++class UuidId {
++public:
++    // ファクトリ：UUID v4 形式を検証して生成
++    static Result<UuidId<Tag>> create(const std::string& value) {
++        if (!isValidUuid(value)) {
++            return Result<UuidId<Tag>>::err(
++                "UuidId: 無効なUUID形式です: " + value
++            );
++        }
++        return Result<UuidId<Tag>>::ok(UuidId<Tag>{value});
++    }
++
++    // 値の取得（DB 保存・比較用）
++    const std::string& value() const { return value_; }
++
++    // 等価比較（同じタグ型のみ比較可能）
++    bool operator==(const UuidId<Tag>& other) const { return value_ == other.value_; }
++    bool operator!=(const UuidId<Tag>& other) const { return !(*this == other); }
++    bool operator< (const UuidId<Tag>& other) const { return value_ < other.value_; }
++
++private:
++    explicit UuidId(std::string value) : value_(std::move(value)) {}
++
++    // UUID v4: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
++    static bool isValidUuid(const std::string& s) {
++        static const std::regex uuid_regex(
++            "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
++            std::regex::icase
++        );
++        return std::regex_match(s, uuid_regex);
++    }
++
++    std::string value_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResult.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResult.hpp"
+new file mode 100644
+index 0000000..980e21a
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResult.hpp"
+@@ -0,0 +1,163 @@
++#pragma once
++
++#include <string>
++#include <vector>
++#include <utility>
++#include "KeyResultId.hpp"
++#include "KeyResultProgress.hpp"
++#include "KrProgressLog.hpp"
++#include "../objective/ObjectiveId.hpp"
++#include "../user/UserId.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// KeyResult — 主要な結果エンティティ（集約ルート、OKR の KR）
++//
++// ドメインルール:
++//   - title は空にできない（最大 255 文字）
++//   - progress は KeyResultProgress（NumericProgress / CheckboxProgress）
++//   - display_order は 0 以上の整数
++//   - 進捗更新時は KrProgressLog を追記し、現在の progress も更新する
++//   - owner_id がチームメンバーかはドメインサービス層で検証する
++// =============================================================================
++class KeyResult {
++public:
++    // ファクトリ：新規 KeyResult 生成
++    static Result<KeyResult> create(
++        KeyResultId         id,
++        ObjectiveId         objectiveId,
++        UserId              ownerId,
++        std::string         title,
++        KeyResultProgress   progress,
++        int                 displayOrder = 0
++    ) {
++        auto titleResult = validateTitle(title);
++        if (!titleResult) return Result<KeyResult>::err(titleResult.error());
++
++        if (displayOrder < 0) {
++            return Result<KeyResult>::err(
++                "KeyResult: display_order は 0 以上でなければなりません: "
++                + std::to_string(displayOrder)
++            );
++        }
++
++        return Result<KeyResult>::ok(KeyResult{
++            std::move(id),
++            std::move(objectiveId),
++            std::move(ownerId),
++            std::move(title),
++            std::move(progress),
++            displayOrder
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const KeyResultId&              id()              const { return id_; }
++    const ObjectiveId&              objectiveId()     const { return objectiveId_; }
++    const UserId&                   ownerId()         const { return ownerId_; }
++    const std::string&              title()           const { return title_; }
++    const KeyResultProgress&        progress()        const { return progress_; }
++    int                             displayOrder()    const { return displayOrder_; }
++    const std::vector<KrProgressLog>& progressLogs()  const { return progressLogs_; }
++    const std::string&              createdAt()       const { return createdAt_; }
++    const std::string&              updatedAt()       const { return updatedAt_; }
++
++    // 達成率（0.0〜1.0）
++    double achievementRate() const {
++        return getAchievementRate(progress_);
++    }
++
++    // KR 種別文字列（"numeric" / "checkbox"）
++    std::string krType() const {
++        return getKrType(progress_);
++    }
++
++    // ─── ドメイン操作 ────────────────────────────────────────
++    // タイトル変更
++    Result<void> changeTitle(const std::string& newTitle) {
++        auto result = validateTitle(newTitle);
++        if (!result) return result;
++        title_ = newTitle;
++        return Result<void>::ok();
++    }
++
++    // オーナー変更（チームメンバー整合性はドメインサービスで保証）
++    void changeOwner(UserId newOwnerId) {
++        ownerId_ = std::move(newOwnerId);
++    }
++
++    // 表示順変更
++    Result<void> reorder(int newOrder) {
++        if (newOrder < 0) {
++            return Result<void>::err(
++                "KeyResult: display_order は 0 以上でなければなりません: "
++                + std::to_string(newOrder)
++            );
++        }
++        displayOrder_ = newOrder;
++        return Result<void>::ok();
++    }
++
++    // 進捗更新（progress を更新し、ログを追記）
++    Result<void> updateProgress(KeyResultProgress newProgress, KrProgressLog log) {
++        // 進捗種別が変わっていないことを確認
++        if (getKrType(newProgress) != getKrType(progress_)) {
++            return Result<void>::err(
++                "KeyResult: 進捗種別を変更することはできません（"
++                + getKrType(progress_) + " → " + getKrType(newProgress) + "）"
++            );
++        }
++        progress_ = std::move(newProgress);
++        progressLogs_.push_back(std::move(log));
++        return Result<void>::ok();
++    }
++
++    // DB再構築用：進捗ログを一括セット（インフラ層からのみ呼び出す）
++    void setProgressLogs(std::vector<KrProgressLog> logs) {
++        progressLogs_ = std::move(logs);
++    }
++
++    // DB再構築用：タイムスタンプをセット
++    void setTimestamps(std::string createdAt, std::string updatedAt) {
++        createdAt_ = std::move(createdAt);
++        updatedAt_ = std::move(updatedAt);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const KeyResult& other) const { return id_ == other.id_; }
++    bool operator!=(const KeyResult& other) const { return !(*this == other); }
++
++private:
++    KeyResult(KeyResultId id, ObjectiveId objectiveId, UserId ownerId,
++              std::string title, KeyResultProgress progress, int displayOrder)
++        : id_(std::move(id))
++        , objectiveId_(std::move(objectiveId))
++        , ownerId_(std::move(ownerId))
++        , title_(std::move(title))
++        , progress_(std::move(progress))
++        , displayOrder_(displayOrder)
++    {}
++
++    static Result<void> validateTitle(const std::string& title) {
++        if (title.empty()) {
++            return Result<void>::err("KeyResult: タイトルが空です");
++        }
++        if (title.size() > 255) {
++            return Result<void>::err(
++                "KeyResult: タイトルが255文字を超えています: "
++                + std::to_string(title.size()) + "文字"
++            );
++        }
++        return Result<void>::ok();
++    }
++
++    KeyResultId              id_;
++    ObjectiveId              objectiveId_;
++    UserId                   ownerId_;
++    std::string              title_;
++    KeyResultProgress        progress_;
++    int                      displayOrder_;
++    std::vector<KrProgressLog> progressLogs_;
++    std::string              createdAt_;
++    std::string              updatedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultId.hpp"
+new file mode 100644
+index 0000000..ea36af2
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultId.hpp"
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// KeyResultId — 主要な結果（KeyResult）IDを表す値オブジェクト
++// =============================================================================
++struct KeyResultTag {};
++using KeyResultId = UuidId<KeyResultTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultProgress.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultProgress.hpp"
+new file mode 100644
+index 0000000..a095bd9
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KeyResultProgress.hpp"
+@@ -0,0 +1,84 @@
++#pragma once
++
++#include <variant>
++#include <optional>
++#include <string>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// NumericProgress — 数値進捗を表す値オブジェクト
++// target > 0、current >= 0 を保証。
++// =============================================================================
++class NumericProgress {
++public:
++    static Result<NumericProgress> create(double target, double current) {
++        if (target <= 0.0) {
++            return Result<NumericProgress>::err(
++                "NumericProgress: 目標値は0より大きい必要があります: " + std::to_string(target)
++            );
++        }
++        if (current < 0.0) {
++            return Result<NumericProgress>::err(
++                "NumericProgress: 現在値は0以上である必要があります: " + std::to_string(current)
++            );
++        }
++        return Result<NumericProgress>::ok(NumericProgress{target, current});
++    }
++
++    double targetValue()  const { return target_; }
++    double currentValue() const { return current_; }
++
++    // 達成率（0.0〜1.0）
++    double achievementRate() const {
++        return current_ / target_;
++    }
++
++    bool operator==(const NumericProgress& o) const {
++        return target_ == o.target_ && current_ == o.current_;
++    }
++
++private:
++    NumericProgress(double target, double current)
++        : target_(target), current_(current) {}
++    double target_;
++    double current_;
++};
++
++// =============================================================================
++// CheckboxProgress — 完了フラグを表す値オブジェクト
++// =============================================================================
++class CheckboxProgress {
++public:
++    static CheckboxProgress create(bool completed) {
++        return CheckboxProgress{completed};
++    }
++
++    bool isCompleted() const { return completed_; }
++
++    // 達成率（0.0 or 1.0）
++    double achievementRate() const { return completed_ ? 1.0 : 0.0; }
++
++    bool operator==(const CheckboxProgress& o) const {
++        return completed_ == o.completed_;
++    }
++
++private:
++    explicit CheckboxProgress(bool completed) : completed_(completed) {}
++    bool completed_;
++};
++
++// =============================================================================
++// KeyResultProgress — NumericProgress / CheckboxProgress の Union型
++// std::variant で型安全に表現。
++// =============================================================================
++using KeyResultProgress = std::variant<NumericProgress, CheckboxProgress>;
++
++// ユーティリティ：達成率を取得（visitor パターン）
++inline double getAchievementRate(const KeyResultProgress& progress) {
++    return std::visit([](const auto& p) { return p.achievementRate(); }, progress);
++}
++
++// ユーティリティ：種別文字列を取得
++inline std::string getKrType(const KeyResultProgress& progress) {
++    return std::holds_alternative<NumericProgress>(progress) ? "numeric" : "checkbox";
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLog.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLog.hpp"
+new file mode 100644
+index 0000000..87d3fb3
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLog.hpp"
+@@ -0,0 +1,105 @@
++#pragma once
++
++#include <string>
++#include <optional>
++#include <utility>
++#include "KrProgressLogId.hpp"
++#include "KeyResultId.hpp"
++#include "../user/UserId.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// KrProgressLog — 進捗ログエンティティ（KeyResult 集約内）
++//
++// ドメインルール:
++//   - numeric KR の場合: value に数値を設定し、completed は nullopt
++//   - checkbox KR の場合: completed に bool を設定し、value は nullopt
++//   - value と completed のどちらか一方のみが有効でなければならない
++//   - recorded_at は記録時点のタイムスタンプ（DB 側で DEFAULT NOW()）
++// =============================================================================
++class KrProgressLog {
++public:
++    // ファクトリ：数値進捗ログ生成（numeric KR 用）
++    static Result<KrProgressLog> createNumeric(
++        KrProgressLogId            id,
++        KeyResultId                keyResultId,
++        UserId                     recordedBy,
++        double                     value,
++        std::optional<std::string> note        = std::nullopt,
++        std::string                recordedAt  = ""
++    ) {
++        return Result<KrProgressLog>::ok(KrProgressLog{
++            std::move(id),
++            std::move(keyResultId),
++            std::move(recordedBy),
++            std::optional<double>{value},
++            std::nullopt,
++            std::move(note),
++            std::move(recordedAt)
++        });
++    }
++
++    // ファクトリ：完了フラグ進捗ログ生成（checkbox KR 用）
++    static Result<KrProgressLog> createCheckbox(
++        KrProgressLogId            id,
++        KeyResultId                keyResultId,
++        UserId                     recordedBy,
++        bool                       completed,
++        std::optional<std::string> note       = std::nullopt,
++        std::string                recordedAt = ""
++    ) {
++        return Result<KrProgressLog>::ok(KrProgressLog{
++            std::move(id),
++            std::move(keyResultId),
++            std::move(recordedBy),
++            std::nullopt,
++            std::optional<bool>{completed},
++            std::move(note),
++            std::move(recordedAt)
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const KrProgressLogId&          id()           const { return id_; }
++    const KeyResultId&              keyResultId()  const { return keyResultId_; }
++    const UserId&                   recordedBy()   const { return recordedBy_; }
++    const std::optional<double>&    value()        const { return value_; }
++    const std::optional<bool>&      completed()    const { return completed_; }
++    const std::optional<std::string>& note()       const { return note_; }
++    const std::string&              recordedAt()   const { return recordedAt_; }
++
++    // 進捗種別の判定
++    bool isNumeric()   const { return value_.has_value(); }
++    bool isCheckbox()  const { return completed_.has_value(); }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const KrProgressLog& other) const { return id_ == other.id_; }
++    bool operator!=(const KrProgressLog& other) const { return !(*this == other); }
++
++private:
++    KrProgressLog(
++        KrProgressLogId            id,
++        KeyResultId                keyResultId,
++        UserId                     recordedBy,
++        std::optional<double>      value,
++        std::optional<bool>        completed,
++        std::optional<std::string> note,
++        std::string                recordedAt
++    )
++        : id_(std::move(id))
++        , keyResultId_(std::move(keyResultId))
++        , recordedBy_(std::move(recordedBy))
++        , value_(std::move(value))
++        , completed_(std::move(completed))
++        , note_(std::move(note))
++        , recordedAt_(std::move(recordedAt))
++    {}
++
++    KrProgressLogId            id_;
++    KeyResultId                keyResultId_;
++    UserId                     recordedBy_;
++    std::optional<double>      value_;      // numeric KR の記録値
++    std::optional<bool>        completed_;  // checkbox KR の記録値
++    std::optional<std::string> note_;
++    std::string                recordedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLogId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLogId.hpp"
+new file mode 100644
+index 0000000..ff7a3cf
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/keyresult/KrProgressLogId.hpp"
+@@ -0,0 +1,10 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// KrProgressLogId — 進捗ログ（KrProgressLog）IDを表す値オブジェクト
++// KeyResult 集約内エンティティの識別子。
++// =============================================================================
++struct KrProgressLogTag {};
++using KrProgressLogId = UuidId<KrProgressLogTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/objective/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/objective/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/objective/Objective.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/objective/Objective.hpp"
+new file mode 100644
+index 0000000..19a61c8
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/objective/Objective.hpp"
+@@ -0,0 +1,133 @@
++#pragma once
++
++#include <string>
++#include <optional>
++#include <utility>
++#include "ObjectiveId.hpp"
++#include "../period/PeriodId.hpp"
++#include "../user/UserId.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Objective — 目標エンティティ（集約ルート、OKR の O）
++//
++// ドメインルール:
++//   - title は空にできない（最大 255 文字）
++//   - display_order は 0 以上の整数（UI 上の並び順）
++//   - owner_id がそのチームメンバーかは ドメインサービス層で検証する
++// =============================================================================
++class Objective {
++public:
++    // ファクトリ：新規目標生成
++    static Result<Objective> create(
++        ObjectiveId                id,
++        PeriodId                   periodId,
++        UserId                     ownerId,
++        std::string                title,
++        std::optional<std::string> description  = std::nullopt,
++        int                        displayOrder = 0
++    ) {
++        auto titleResult = validateTitle(title);
++        if (!titleResult) return Result<Objective>::err(titleResult.error());
++
++        if (displayOrder < 0) {
++            return Result<Objective>::err(
++                "Objective: display_order は 0 以上でなければなりません: "
++                + std::to_string(displayOrder)
++            );
++        }
++
++        return Result<Objective>::ok(Objective{
++            std::move(id),
++            std::move(periodId),
++            std::move(ownerId),
++            std::move(title),
++            std::move(description),
++            displayOrder
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const ObjectiveId&                  id()           const { return id_; }
++    const PeriodId&                     periodId()     const { return periodId_; }
++    const UserId&                       ownerId()      const { return ownerId_; }
++    const std::string&                  title()        const { return title_; }
++    const std::optional<std::string>&   description()  const { return description_; }
++    int                                 displayOrder() const { return displayOrder_; }
++    const std::string&                  createdAt()    const { return createdAt_; }
++    const std::string&                  updatedAt()    const { return updatedAt_; }
++
++    // ─── ドメイン操作 ────────────────────────────────────────
++    // タイトル変更
++    Result<void> changeTitle(const std::string& newTitle) {
++        auto result = validateTitle(newTitle);
++        if (!result) return result;
++        title_ = newTitle;
++        return Result<void>::ok();
++    }
++
++    // 説明変更
++    void changeDescription(std::optional<std::string> desc) {
++        description_ = std::move(desc);
++    }
++
++    // オーナー変更（チームメンバー整合性はドメインサービスで保証）
++    void changeOwner(UserId newOwnerId) {
++        ownerId_ = std::move(newOwnerId);
++    }
++
++    // 表示順変更
++    Result<void> reorder(int newOrder) {
++        if (newOrder < 0) {
++            return Result<void>::err(
++                "Objective: display_order は 0 以上でなければなりません: "
++                + std::to_string(newOrder)
++            );
++        }
++        displayOrder_ = newOrder;
++        return Result<void>::ok();
++    }
++
++    // DB再構築用：タイムスタンプをセット
++    void setTimestamps(std::string createdAt, std::string updatedAt) {
++        createdAt_ = std::move(createdAt);
++        updatedAt_ = std::move(updatedAt);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const Objective& other) const { return id_ == other.id_; }
++    bool operator!=(const Objective& other) const { return !(*this == other); }
++
++private:
++    Objective(ObjectiveId id, PeriodId periodId, UserId ownerId,
++              std::string title, std::optional<std::string> description, int displayOrder)
++        : id_(std::move(id))
++        , periodId_(std::move(periodId))
++        , ownerId_(std::move(ownerId))
++        , title_(std::move(title))
++        , description_(std::move(description))
++        , displayOrder_(displayOrder)
++    {}
++
++    static Result<void> validateTitle(const std::string& title) {
++        if (title.empty()) {
++            return Result<void>::err("Objective: タイトルが空です");
++        }
++        if (title.size() > 255) {
++            return Result<void>::err(
++                "Objective: タイトルが255文字を超えています: "
++                + std::to_string(title.size()) + "文字"
++            );
++        }
++        return Result<void>::ok();
++    }
++
++    ObjectiveId                 id_;
++    PeriodId                    periodId_;
++    UserId                      ownerId_;
++    std::string                 title_;
++    std::optional<std::string>  description_;
++    int                         displayOrder_;
++    std::string                 createdAt_;
++    std::string                 updatedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/objective/ObjectiveId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/objective/ObjectiveId.hpp"
+new file mode 100644
+index 0000000..5ed7aae
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/objective/ObjectiveId.hpp"
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// ObjectiveId — 目標（Objective）IDを表す値オブジェクト
++// =============================================================================
++struct ObjectiveTag {};
++using ObjectiveId = UuidId<ObjectiveTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/period/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/period/DateRange.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/DateRange.hpp"
+new file mode 100644
+index 0000000..2156683
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/DateRange.hpp"
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <string>
++#include <chrono>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// DateRange — 期間（開始日〜終了日）を表す値オブジェクト
++// start_date < end_date を保証。イミュータブル。
++// 日付は "YYYY-MM-DD" 文字列で保持（PostgreSQL DATE型と対応）。
++// =============================================================================
++class DateRange {
++public:
++    static Result<DateRange> create(const std::string& start, const std::string& end) {
++        if (!isValidDate(start)) {
++            return Result<DateRange>::err("DateRange: 無効な開始日形式です: " + start);
++        }
++        if (!isValidDate(end)) {
++            return Result<DateRange>::err("DateRange: 無効な終了日形式です: " + end);
++        }
++        if (start >= end) {
++            return Result<DateRange>::err(
++                "DateRange: 開始日は終了日より前でなければなりません: " + start + " >= " + end
++            );
++        }
++        return Result<DateRange>::ok(DateRange{start, end});
++    }
++
++    const std::string& startDate() const { return start_; }
++    const std::string& endDate()   const { return end_; }
++
++    bool operator==(const DateRange& other) const {
++        return start_ == other.start_ && end_ == other.end_;
++    }
++    bool operator!=(const DateRange& other) const { return !(*this == other); }
++
++private:
++    DateRange(std::string start, std::string end)
++        : start_(std::move(start)), end_(std::move(end)) {}
++
++    // YYYY-MM-DD 形式チェック（簡易）
++    static bool isValidDate(const std::string& s) {
++        if (s.size() != 10) return false;
++        if (s[4] != '-' || s[7] != '-') return false;
++        for (int i : {0,1,2,3,5,6,8,9}) {
++            if (!std::isdigit(s[i])) return false;
++        }
++        const int month = std::stoi(s.substr(5, 2));
++        const int day   = std::stoi(s.substr(8, 2));
++        return month >= 1 && month <= 12 && day >= 1 && day <= 31;
++    }
++
++    std::string start_;
++    std::string end_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/period/Half.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/Half.hpp"
+new file mode 100644
+index 0000000..4b395b5
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/Half.hpp"
+@@ -0,0 +1,35 @@
++#pragma once
++
++#include <string>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Half — 上期 / 下期を表す値オブジェクト
++// H1 / H2 のみ許容。イミュータブル。
++// =============================================================================
++class Half {
++public:
++    enum class Value { H1, H2 };
++
++    static Result<Half> create(const std::string& value) {
++        if (value == "H1") return Result<Half>::ok(Half{Value::H1});
++        if (value == "H2") return Result<Half>::ok(Half{Value::H2});
++        return Result<Half>::err("Half: 無効な値です: " + value + "（H1 / H2 のみ有効）");
++    }
++
++    static Half h1() { return Half{Value::H1}; }
++    static Half h2() { return Half{Value::H2}; }
++
++    Value value() const { return value_; }
++
++    std::string toString() const {
++        return value_ == Value::H1 ? "H1" : "H2";
++    }
++
++    bool operator==(const Half& other) const { return value_ == other.value_; }
++    bool operator!=(const Half& other) const { return !(*this == other); }
++
++private:
++    explicit Half(Value value) : value_(value) {}
++    Value value_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/period/Period.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/Period.hpp"
+new file mode 100644
+index 0000000..ae92c57
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/Period.hpp"
+@@ -0,0 +1,88 @@
++#pragma once
++
++#include <string>
++#include <utility>
++#include "PeriodId.hpp"
++#include "Half.hpp"
++#include "DateRange.hpp"
++#include "../team/TeamId.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Period — 半期 OKRサイクルエンティティ（集約ルート）
++//
++// ドメインルール:
++//   - name は空にできない（例: "2025-H1"、最大 50 文字）
++//   - half と DateRange は対応していること（ドメインサービスで検証）
++//   - Period は一度作成したら基本的に変更しない（不変に近い集約）
++// =============================================================================
++class Period {
++public:
++    // ファクトリ：新規期間生成
++    static Result<Period> create(
++        PeriodId    id,
++        TeamId      teamId,
++        std::string name,
++        Half        half,
++        DateRange   dateRange
++    ) {
++        auto nameResult = validateName(name);
++        if (!nameResult) return Result<Period>::err(nameResult.error());
++
++        return Result<Period>::ok(Period{
++            std::move(id),
++            std::move(teamId),
++            std::move(name),
++            std::move(half),
++            std::move(dateRange)
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const PeriodId&    id()        const { return id_; }
++    const TeamId&      teamId()    const { return teamId_; }
++    const std::string& name()      const { return name_; }
++    const Half&        half()      const { return half_; }
++    const DateRange&   dateRange() const { return dateRange_; }
++    const std::string& createdAt() const { return createdAt_; }
++    const std::string& updatedAt() const { return updatedAt_; }
++
++    // DB再構築用：タイムスタンプをセット
++    void setTimestamps(std::string createdAt, std::string updatedAt) {
++        createdAt_ = std::move(createdAt);
++        updatedAt_ = std::move(updatedAt);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const Period& other) const { return id_ == other.id_; }
++    bool operator!=(const Period& other) const { return !(*this == other); }
++
++private:
++    Period(PeriodId id, TeamId teamId, std::string name, Half half, DateRange dateRange)
++        : id_(std::move(id))
++        , teamId_(std::move(teamId))
++        , name_(std::move(name))
++        , half_(std::move(half))
++        , dateRange_(std::move(dateRange))
++    {}
++
++    static Result<void> validateName(const std::string& name) {
++        if (name.empty()) {
++            return Result<void>::err("Period: 期間名が空です");
++        }
++        if (name.size() > 50) {
++            return Result<void>::err(
++                "Period: 期間名が50文字を超えています: " + std::to_string(name.size()) + "文字"
++            );
++        }
++        return Result<void>::ok();
++    }
++
++    PeriodId    id_;
++    TeamId      teamId_;
++    std::string name_;
++    Half        half_;
++    DateRange   dateRange_;
++    std::string createdAt_;
++    std::string updatedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/period/PeriodId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/PeriodId.hpp"
+new file mode 100644
+index 0000000..6a309e4
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/period/PeriodId.hpp"
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// PeriodId — 期間（半期 OKRサイクル）IDを表す値オブジェクト
++// =============================================================================
++struct PeriodTag {};
++using PeriodId = UuidId<PeriodTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/Role.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/Role.hpp"
+new file mode 100644
+index 0000000..2e11623
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/Role.hpp"
+@@ -0,0 +1,39 @@
++#pragma once
++
++#include <string>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Role — チームメンバーのロールを表す値オブジェクト
++// admin / member のみ許容。イミュータブル。
++// =============================================================================
++class Role {
++public:
++    enum class Value { Admin, Member };
++
++    static Result<Role> create(const std::string& value) {
++        if (value == "admin")  return Result<Role>::ok(Role{Value::Admin});
++        if (value == "member") return Result<Role>::ok(Role{Value::Member});
++        return Result<Role>::err("Role: 無効なロールです: " + value + "（admin / member のみ有効）");
++    }
++
++    static Role admin()  { return Role{Value::Admin}; }
++    static Role member() { return Role{Value::Member}; }
++
++    Value value() const { return value_; }
++
++    bool isAdmin()  const { return value_ == Value::Admin; }
++    bool isMember() const { return value_ == Value::Member; }
++
++    // DB保存・表示用
++    std::string toString() const {
++        return value_ == Value::Admin ? "admin" : "member";
++    }
++
++    bool operator==(const Role& other) const { return value_ == other.value_; }
++    bool operator!=(const Role& other) const { return !(*this == other); }
++
++private:
++    explicit Role(Value value) : value_(value) {}
++    Value value_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/Team.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/Team.hpp"
+new file mode 100644
+index 0000000..eaf9891
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/Team.hpp"
+@@ -0,0 +1,166 @@
++#pragma once
++
++#include <string>
++#include <vector>
++#include <optional>
++#include <algorithm>
++#include <utility>
++#include "TeamId.hpp"
++#include "TeamMember.hpp"
++#include "../user/UserId.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Team — チームエンティティ（集約ルート）
++//
++// ドメインルール:
++//   - name は空にできない（最大 100 文字）
++//   - 同一 user を同一 team に重複追加してはならない
++//   - admin は team に必ず 1 人以上存在しなければならない（admin 削除時に検証）
++//   - TeamMember は Team 集約内でのみ管理する
++// =============================================================================
++class Team {
++public:
++    // ファクトリ：新規チーム生成
++    static Result<Team> create(
++        TeamId                   id,
++        std::string              name,
++        std::optional<std::string> description = std::nullopt
++    ) {
++        auto nameResult = validateName(name);
++        if (!nameResult) return Result<Team>::err(nameResult.error());
++
++        return Result<Team>::ok(Team{
++            std::move(id),
++            std::move(name),
++            std::move(description)
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const TeamId&                       id()          const { return id_; }
++    const std::string&                  name()        const { return name_; }
++    const std::optional<std::string>&   description() const { return description_; }
++    const std::vector<TeamMember>&      members()     const { return members_; }
++    const std::string&                  createdAt()   const { return createdAt_; }
++    const std::string&                  updatedAt()   const { return updatedAt_; }
++
++    // ─── ドメイン操作 ────────────────────────────────────────
++    // チーム名変更
++    Result<void> changeName(const std::string& newName) {
++        auto result = validateName(newName);
++        if (!result) return result;
++        name_ = newName;
++        return Result<void>::ok();
++    }
++
++    // 説明文変更
++    void changeDescription(std::optional<std::string> desc) {
++        description_ = std::move(desc);
++    }
++
++    // メンバー追加（重複チェック付き）
++    Result<void> addMember(TeamMember member) {
++        if (hasMember(member.userId())) {
++            return Result<void>::err(
++                "Team: ユーザー " + member.userId().value() + " はすでにチームメンバーです"
++            );
++        }
++        members_.push_back(std::move(member));
++        return Result<void>::ok();
++    }
++
++    // メンバー削除（admin が 0 人になる場合はエラー）
++    Result<void> removeMember(const UserId& userId) {
++        auto it = findIterator(userId);
++        if (it == members_.end()) {
++            return Result<void>::err(
++                "Team: ユーザー " + userId.value() + " はこのチームのメンバーではありません"
++            );
++        }
++        // admin を削除する場合、残り admin が 0 人になるか確認
++        if (it->role().isAdmin() && adminCount() <= 1) {
++            return Result<void>::err("Team: チームには admin が最低 1 人必要です");
++        }
++        members_.erase(it);
++        return Result<void>::ok();
++    }
++
++    // メンバーのロール変更
++    Result<void> changeMemberRole(const UserId& userId, Role newRole) {
++        auto it = findIterator(userId);
++        if (it == members_.end()) {
++            return Result<void>::err(
++                "Team: ユーザー " + userId.value() + " はこのチームのメンバーではありません"
++            );
++        }
++        // admin から member に降格する場合、残り admin が 0 人になるか確認
++        if (it->role().isAdmin() && newRole.isMember() && adminCount() <= 1) {
++            return Result<void>::err("Team: チームには admin が最低 1 人必要です");
++        }
++        it->changeRole(std::move(newRole));
++        return Result<void>::ok();
++    }
++
++    // メンバー検索
++    const TeamMember* findMember(const UserId& userId) const {
++        auto it = std::find_if(members_.begin(), members_.end(),
++            [&userId](const TeamMember& m) { return m.userId() == userId; });
++        return it != members_.end() ? &(*it) : nullptr;
++    }
++
++    bool hasMember(const UserId& userId) const {
++        return findMember(userId) != nullptr;
++    }
++
++    // DB再構築用：メンバーリストを一括セット（インフラ層からのみ呼び出す）
++    void setMembers(std::vector<TeamMember> members) {
++        members_ = std::move(members);
++    }
++
++    // DB再構築用：タイムスタンプをセット
++    void setTimestamps(std::string createdAt, std::string updatedAt) {
++        createdAt_ = std::move(createdAt);
++        updatedAt_ = std::move(updatedAt);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const Team& other) const { return id_ == other.id_; }
++    bool operator!=(const Team& other) const { return !(*this == other); }
++
++private:
++    Team(TeamId id, std::string name, std::optional<std::string> description)
++        : id_(std::move(id))
++        , name_(std::move(name))
++        , description_(std::move(description))
++    {}
++
++    static Result<void> validateName(const std::string& name) {
++        if (name.empty()) {
++            return Result<void>::err("Team: チーム名が空です");
++        }
++        if (name.size() > 100) {
++            return Result<void>::err(
++                "Team: チーム名が100文字を超えています: " + std::to_string(name.size()) + "文字"
++            );
++        }
++        return Result<void>::ok();
++    }
++
++    std::vector<TeamMember>::iterator findIterator(const UserId& userId) {
++        return std::find_if(members_.begin(), members_.end(),
++            [&userId](const TeamMember& m) { return m.userId() == userId; });
++    }
++
++    int adminCount() const {
++        return static_cast<int>(std::count_if(members_.begin(), members_.end(),
++            [](const TeamMember& m) { return m.role().isAdmin(); }));
++    }
++
++    TeamId                      id_;
++    std::string                 name_;
++    std::optional<std::string>  description_;
++    std::vector<TeamMember>     members_;
++    std::string                 createdAt_;
++    std::string                 updatedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamId.hpp"
+new file mode 100644
+index 0000000..ba55437
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamId.hpp"
+@@ -0,0 +1,10 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// TeamId — チームIDを表す値オブジェクト
++// UUID v4 形式のみ受け付ける。UserId と型レベルで区別される。
++// =============================================================================
++struct TeamTag {};
++using TeamId = UuidId<TeamTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMember.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMember.hpp"
+new file mode 100644
+index 0000000..b2053ce
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMember.hpp"
+@@ -0,0 +1,70 @@
++#pragma once
++
++#include <string>
++#include <utility>
++#include "TeamMemberId.hpp"
++#include "TeamId.hpp"
++#include "../user/UserId.hpp"
++#include "../team/Role.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// TeamMember — チームメンバーエンティティ（Team 集約内）
++//
++// ドメインルール:
++//   - team_members テーブルの 1 行に対応
++//   - ロール変更はドメイン操作として提供する
++//   - 同一 team に同一 user が重複して存在してはならない
++//     → ただし重複排除のチェックは Team 集約ルート（Team クラス）で行う
++// =============================================================================
++class TeamMember {
++public:
++    // ファクトリ：新規メンバー生成
++    static Result<TeamMember> create(
++        TeamMemberId id,
++        TeamId       teamId,
++        UserId       userId,
++        Role         role,
++        std::string  joinedAt = ""
++    ) {
++        return Result<TeamMember>::ok(TeamMember{
++            std::move(id),
++            std::move(teamId),
++            std::move(userId),
++            std::move(role),
++            std::move(joinedAt)
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const TeamMemberId& id()       const { return id_; }
++    const TeamId&       teamId()   const { return teamId_; }
++    const UserId&       userId()   const { return userId_; }
++    const Role&         role()     const { return role_; }
++    const std::string&  joinedAt() const { return joinedAt_; }
++
++    // ─── ドメイン操作 ────────────────────────────────────────
++    // ロール変更
++    void changeRole(Role newRole) {
++        role_ = std::move(newRole);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const TeamMember& other) const { return id_ == other.id_; }
++    bool operator!=(const TeamMember& other) const { return !(*this == other); }
++
++private:
++    TeamMember(TeamMemberId id, TeamId teamId, UserId userId, Role role, std::string joinedAt)
++        : id_(std::move(id))
++        , teamId_(std::move(teamId))
++        , userId_(std::move(userId))
++        , role_(std::move(role))
++        , joinedAt_(std::move(joinedAt))
++    {}
++
++    TeamMemberId id_;
++    TeamId       teamId_;
++    UserId       userId_;
++    Role         role_;
++    std::string  joinedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMemberId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMemberId.hpp"
+new file mode 100644
+index 0000000..ffafb6c
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/team/TeamMemberId.hpp"
+@@ -0,0 +1,10 @@
++#pragma once
++
++#include "../../../common/UuidId.hpp"
++
++// =============================================================================
++// TeamMemberId — チームメンバーIDを表す値オブジェクト
++// Team 集約内エンティティ（TeamMember）の識別子。
++// =============================================================================
++struct TeamMemberTag {};
++using TeamMemberId = UuidId<TeamMemberTag>;
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/user/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/user/Email.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/Email.hpp"
+new file mode 100644
+index 0000000..ba9d701
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/Email.hpp"
+@@ -0,0 +1,53 @@
++#pragma once
++
++#include <string>
++#include <regex>
++#include <algorithm>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// Email — メールアドレスを表す値オブジェクト
++// RFC5322 簡易検証。小文字正規化済み。イミュータブル。
++// =============================================================================
++class Email {
++public:
++    static Result<Email> create(const std::string& value) {
++        const std::string normalized = normalize(value);
++
++        if (normalized.empty()) {
++            return Result<Email>::err("Email: メールアドレスが空です");
++        }
++        if (normalized.size() > 255) {
++            return Result<Email>::err("Email: メールアドレスが255文字を超えています");
++        }
++        if (!isValid(normalized)) {
++            return Result<Email>::err("Email: 無効なメールアドレス形式です: " + value);
++        }
++
++        return Result<Email>::ok(Email{normalized});
++    }
++
++    const std::string& value() const { return value_; }
++
++    bool operator==(const Email& other) const { return value_ == other.value_; }
++    bool operator!=(const Email& other) const { return !(*this == other); }
++
++private:
++    explicit Email(std::string value) : value_(std::move(value)) {}
++
++    // 小文字に正規化
++    static std::string normalize(std::string s) {
++        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
++        return s;
++    }
++
++    static bool isValid(const std::string& s) {
++        // RFC5322 簡易チェック（local@domain.tld）
++        static const std::regex email_regex(
++            R"(^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$)"
++        );
++        return std::regex_match(s, email_regex);
++    }
++
++    std::string value_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/user/User.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/User.hpp"
+new file mode 100644
+index 0000000..bf9fdbb
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/User.hpp"
+@@ -0,0 +1,100 @@
++#pragma once
++
++#include <string>
++#include <utility>
++#include "UserId.hpp"
++#include "Email.hpp"
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// User — ユーザーエンティティ（集約ルート）
++//
++// ドメインルール:
++//   - name は空にできない（最大 100 文字）
++//   - email は Email 値オブジェクトで検証済み
++//   - password_hash は外部（認証サービス等）でハッシュ化済みの文字列を受け取る
++//   - created_at / updated_at は DB 側で管理するため任意フィールド
++// =============================================================================
++class User {
++public:
++    // ファクトリ：新規ユーザー生成
++    static Result<User> create(
++        UserId          id,
++        std::string     name,
++        Email           email,
++        std::string     passwordHash
++    ) {
++        auto nameResult = validateName(name);
++        if (!nameResult) return Result<User>::err(nameResult.error());
++
++        return Result<User>::ok(User{
++            std::move(id),
++            std::move(name),
++            std::move(email),
++            std::move(passwordHash)
++        });
++    }
++
++    // ─── アクセサ ───────────────────────────────────────────
++    const UserId&      id()           const { return id_; }
++    const std::string& name()         const { return name_; }
++    const Email&       email()        const { return email_; }
++    const std::string& passwordHash() const { return passwordHash_; }
++    const std::string& createdAt()    const { return createdAt_; }
++    const std::string& updatedAt()    const { return updatedAt_; }
++
++    // ─── ドメイン操作 ────────────────────────────────────────
++    // 名前変更
++    Result<void> changeName(const std::string& newName) {
++        auto result = validateName(newName);
++        if (!result) return result;
++        name_ = newName;
++        return Result<void>::ok();
++    }
++
++    // パスワードハッシュ更新（認証サービスからハッシュ化済み文字列を受け取る）
++    Result<void> changePasswordHash(const std::string& newHash) {
++        if (newHash.empty()) {
++            return Result<void>::err("User: パスワードハッシュが空です");
++        }
++        passwordHash_ = newHash;
++        return Result<void>::ok();
++    }
++
++    // DB再構築用：タイムスタンプをセット（インフラ層からのみ呼び出す）
++    void setTimestamps(std::string createdAt, std::string updatedAt) {
++        createdAt_ = std::move(createdAt);
++        updatedAt_ = std::move(updatedAt);
++    }
++
++    // ─── 等価比較（ID で同一性を判定）───────────────────────
++    bool operator==(const User& other) const { return id_ == other.id_; }
++    bool operator!=(const User& other) const { return !(*this == other); }
++
++private:
++    User(UserId id, std::string name, Email email, std::string passwordHash)
++        : id_(std::move(id))
++        , name_(std::move(name))
++        , email_(std::move(email))
++        , passwordHash_(std::move(passwordHash))
++    {}
++
++    static Result<void> validateName(const std::string& name) {
++        if (name.empty()) {
++            return Result<void>::err("User: 名前が空です");
++        }
++        if (name.size() > 100) {
++            return Result<void>::err(
++                "User: 名前が100文字を超えています: " + std::to_string(name.size()) + "文字"
++            );
++        }
++        return Result<void>::ok();
++    }
++
++    UserId      id_;
++    std::string name_;
++    Email       email_;
++    std::string passwordHash_;
++    std::string createdAt_;
++    std::string updatedAt_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/model/user/UserId.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/UserId.hpp"
+new file mode 100644
+index 0000000..bb83aad
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/model/user/UserId.hpp"
+@@ -0,0 +1,42 @@
++#pragma once
++
++#include <string>
++#include <regex>
++#include "../../../common/Result.hpp"
++
++// =============================================================================
++// UserId — ユーザーIDを表す値オブジェクト
++// UUID v4 形式のみ受け付ける。イミュータブル。
++// =============================================================================
++class UserId {
++public:
++    // ファクトリ：バリデーション付き生成
++    static Result<UserId> create(const std::string& value) {
++        if (!isValidUuid(value)) {
++            return Result<UserId>::err("UserId: 無効なUUID形式です: " + value);
++        }
++        return Result<UserId>::ok(UserId{value});
++    }
++
++    // 値の取得
++    const std::string& value() const { return value_; }
++
++    // 等価比較
++    bool operator==(const UserId& other) const { return value_ == other.value_; }
++    bool operator!=(const UserId& other) const { return !(*this == other); }
++    bool operator<(const UserId& other)  const { return value_ < other.value_; }
++
++private:
++    explicit UserId(std::string value) : value_(std::move(value)) {}
++
++    static bool isValidUuid(const std::string& s) {
++        // UUID v4: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
++        static const std::regex uuid_regex(
++            "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
++            std::regex::icase
++        );
++        return std::regex_match(s, uuid_regex);
++    }
++
++    std::string value_;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/IKeyResultRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IKeyResultRepository.hpp"
+new file mode 100644
+index 0000000..cf4877a
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IKeyResultRepository.hpp"
+@@ -0,0 +1,45 @@
++#pragma once
++
++#include <optional>
++#include <vector>
++#include "../model/keyresult/KeyResult.hpp"
++#include "../model/keyresult/KeyResultId.hpp"
++#include "../model/objective/ObjectiveId.hpp"
++#include "../model/user/UserId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// IKeyResultRepository — 主要な結果Repositoryインターフェース（純粋仮想）
++//
++// ドメイン層に属する。インフラ層への依存を持たない。
++// 実装は infrastructure/repository/PgKeyResultRepository で行う。
++//
++// KeyResult 集約は KeyResult + KrProgressLog を一括で管理する。
++// KrProgressLog は KeyResult 集約内でのみ管理し、個別のRepositoryは持たない。
++//
++// 操作一覧:
++//   - findById          : ID でKRを1件取得（KrProgressLog含む）
++//   - findByObjectiveId : 目標IDに紐づくKR一覧を取得（display_order 昇順）
++//   - findByOwnerId     : オーナーIDに紐づくKR一覧を取得
++//   - save              : 新規作成 or 更新（KeyResult + KrProgressLog を一括保存）
++//   - remove            : ID でKRを削除
++// =============================================================================
++class IKeyResultRepository {
++public:
++    virtual ~IKeyResultRepository() = default;
++
++    // ID でKRを取得（KrProgressLog 含む）。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<KeyResult>> findById(const KeyResultId& id) const = 0;
++
++    // 目標IDに紐づくKR一覧を取得（KrProgressLog 含む、display_order 昇順）。
++    virtual Result<std::vector<KeyResult>> findByObjectiveId(const ObjectiveId& objectiveId) const = 0;
++
++    // オーナーIDに紐づくKR一覧を取得（KrProgressLog 含む）。
++    virtual Result<std::vector<KeyResult>> findByOwnerId(const UserId& ownerId) const = 0;
++
++    // KRを保存（新規作成 or 更新）。KeyResult + KrProgressLog を一括保存する。
++    virtual Result<void> save(const KeyResult& keyResult) = 0;
++
++    // ID でKRを削除。対象が存在しない場合もエラーにしない。
++    virtual Result<void> remove(const KeyResultId& id) = 0;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/IObjectiveRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IObjectiveRepository.hpp"
+new file mode 100644
+index 0000000..ec533e9
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IObjectiveRepository.hpp"
+@@ -0,0 +1,42 @@
++#pragma once
++
++#include <optional>
++#include <vector>
++#include "../model/objective/Objective.hpp"
++#include "../model/objective/ObjectiveId.hpp"
++#include "../model/period/PeriodId.hpp"
++#include "../model/user/UserId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// IObjectiveRepository — 目標Repositoryインターフェース（純粋仮想）
++//
++// ドメイン層に属する。インフラ層への依存を持たない。
++// 実装は infrastructure/repository/PgObjectiveRepository で行う。
++//
++// 操作一覧:
++//   - findById       : ID で目標を1件取得
++//   - findByPeriodId : 期間IDに紐づく目標一覧を取得（display_order 昇順）
++//   - findByOwnerId  : オーナーIDに紐づく目標一覧を取得
++//   - save           : 新規作成 or 更新
++//   - remove         : ID で目標を削除
++// =============================================================================
++class IObjectiveRepository {
++public:
++    virtual ~IObjectiveRepository() = default;
++
++    // ID で目標を取得。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<Objective>> findById(const ObjectiveId& id) const = 0;
++
++    // 期間IDに紐づく目標一覧を取得（display_order 昇順）。
++    virtual Result<std::vector<Objective>> findByPeriodId(const PeriodId& periodId) const = 0;
++
++    // オーナーIDに紐づく目標一覧を取得。
++    virtual Result<std::vector<Objective>> findByOwnerId(const UserId& ownerId) const = 0;
++
++    // 目標を保存（新規作成 or 更新）。
++    virtual Result<void> save(const Objective& objective) = 0;
++
++    // ID で目標を削除。対象が存在しない場合もエラーにしない。
++    virtual Result<void> remove(const ObjectiveId& id) = 0;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/IPeriodRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IPeriodRepository.hpp"
+new file mode 100644
+index 0000000..1541e17
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IPeriodRepository.hpp"
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include <optional>
++#include <vector>
++#include "../model/period/Period.hpp"
++#include "../model/period/PeriodId.hpp"
++#include "../model/team/TeamId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// IPeriodRepository — 期間Repositoryインターフェース（純粋仮想）
++//
++// ドメイン層に属する。インフラ層への依存を持たない。
++// 実装は infrastructure/repository/PgPeriodRepository で行う。
++//
++// 操作一覧:
++//   - findById     : ID で期間を1件取得
++//   - findByTeamId : チームIDに紐づく期間一覧を取得
++//   - findAll      : 全期間を取得
++//   - save         : 新規作成 or 更新
++//   - remove       : ID で期間を削除
++// =============================================================================
++class IPeriodRepository {
++public:
++    virtual ~IPeriodRepository() = default;
++
++    // ID で期間を取得。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<Period>> findById(const PeriodId& id) const = 0;
++
++    // チームIDに紐づく期間一覧を取得。
++    virtual Result<std::vector<Period>> findByTeamId(const TeamId& teamId) const = 0;
++
++    // 全期間を取得。
++    virtual Result<std::vector<Period>> findAll() const = 0;
++
++    // 期間を保存（新規作成 or 更新）。
++    virtual Result<void> save(const Period& period) = 0;
++
++    // ID で期間を削除。対象が存在しない場合もエラーにしない。
++    virtual Result<void> remove(const PeriodId& id) = 0;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/ITeamRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/ITeamRepository.hpp"
+new file mode 100644
+index 0000000..5ec66e4
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/repository/ITeamRepository.hpp"
+@@ -0,0 +1,44 @@
++#pragma once
++
++#include <optional>
++#include <vector>
++#include "../model/team/Team.hpp"
++#include "../model/team/TeamId.hpp"
++#include "../model/user/UserId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// ITeamRepository — チームRepositoryインターフェース（純粋仮想）
++//
++// ドメイン層に属する。インフラ層への依存を持たない。
++// 実装は infrastructure/repository/PgTeamRepository で行う。
++//
++// Team 集約は Team + TeamMember を一括で管理する（集約整合性の保証）。
++// TeamMember は Team 集約内でのみ管理し、個別のRepositoryは持たない。
++//
++// 操作一覧:
++//   - findById      : ID でチームを1件取得（TeamMemberも含む）
++//   - findByUserId  : 指定ユーザーが所属するチーム一覧を取得
++//   - findAll       : 全チームを取得
++//   - save          : 新規作成 or 更新（Team + TeamMember を一括保存）
++//   - remove        : ID でチームを削除
++// =============================================================================
++class ITeamRepository {
++public:
++    virtual ~ITeamRepository() = default;
++
++    // ID でチームを取得（TeamMember 含む）。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<Team>> findById(const TeamId& id) const = 0;
++
++    // 指定ユーザーが所属するチーム一覧を取得（TeamMember 含む）。
++    virtual Result<std::vector<Team>> findByUserId(const UserId& userId) const = 0;
++
++    // 全チームを取得（TeamMember 含む）。
++    virtual Result<std::vector<Team>> findAll() const = 0;
++
++    // チームを保存（新規作成 or 更新）。Team + TeamMember を一括保存する。
++    virtual Result<void> save(const Team& team) = 0;
++
++    // ID でチームを削除。対象が存在しない場合もエラーにしない。
++    virtual Result<void> remove(const TeamId& id) = 0;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/repository/IUserRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IUserRepository.hpp"
+new file mode 100644
+index 0000000..5f0de88
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/domain/repository/IUserRepository.hpp"
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include <optional>
++#include <vector>
++#include "../model/user/User.hpp"
++#include "../model/user/UserId.hpp"
++#include "../model/user/Email.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// IUserRepository — ユーザーRepositoryインターフェース（純粋仮想）
++//
++// ドメイン層に属する。インフラ層への依存を持たない。
++// 実装は infrastructure/repository/PgUserRepository で行う。
++//
++// 操作一覧:
++//   - findById    : ID でユーザーを1件取得
++//   - findByEmail : メールアドレスでユーザーを1件取得
++//   - findAll     : 全ユーザーを取得
++//   - save        : 新規作成 or 更新（upsert）
++//   - remove      : ID でユーザーを削除
++// =============================================================================
++class IUserRepository {
++public:
++    virtual ~IUserRepository() = default;
++
++    // ID でユーザーを取得。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<User>> findById(const UserId& id) const = 0;
++
++    // メールアドレスでユーザーを取得。存在しない場合は std::nullopt を返す。
++    virtual Result<std::optional<User>> findByEmail(const Email& email) const = 0;
++
++    // 全ユーザーを取得。
++    virtual Result<std::vector<User>> findAll() const = 0;
++
++    // ユーザーを保存（新規作成 or 更新）。
++    virtual Result<void> save(const User& user) = 0;
++
++    // ID でユーザーを削除。対象が存在しない場合もエラーにしない。
++    virtual Result<void> remove(const UserId& id) = 0;
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/domain/service/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/domain/service/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/infrastructure/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/infrastructure/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgKeyResultRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgKeyResultRepository.hpp"
+new file mode 100644
+index 0000000..9d2104b
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgKeyResultRepository.hpp"
+@@ -0,0 +1,455 @@
++#pragma once
++
++#include <memory>
++#include <optional>
++#include <vector>
++#include <string>
++#include <stdexcept>
++#include <unordered_map>
++
++#include <pqxx/pqxx>
++
++#include "../../domain/repository/IKeyResultRepository.hpp"
++#include "../../domain/model/keyresult/KeyResult.hpp"
++#include "../../domain/model/keyresult/KeyResultId.hpp"
++#include "../../domain/model/keyresult/KeyResultProgress.hpp"
++#include "../../domain/model/keyresult/KrProgressLog.hpp"
++#include "../../domain/model/keyresult/KrProgressLogId.hpp"
++#include "../../domain/model/objective/ObjectiveId.hpp"
++#include "../../domain/model/user/UserId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// PgKeyResultRepository — IKeyResultRepository の PostgreSQL（libpqxx）実装
++//
++// インフラ層。pqxx::connection を shared_ptr で受け取る。
++//
++// KeyResult 集約は KeyResult + KrProgressLog を一括で管理する。
++//
++// SQL 方針:
++//   - findById / findByXxx():
++//       key_results と kr_progress_logs を LEFT JOIN して取得し、
++//       C++ 側で KeyResult に KrProgressLog を組み込む。
++//   - save():
++//       1. key_results を upsert（INSERT ... ON CONFLICT (id) DO UPDATE）
++//       2. progressLogs_ を INSERT ... ON CONFLICT (id) DO NOTHING で追記
++//          （ログは不変：一度保存したら変更しない）
++//   - remove():
++//       key_results を削除（kr_progress_logs は CASCADE で連動削除）
++// =============================================================================
++class PgKeyResultRepository : public IKeyResultRepository {
++public:
++    explicit PgKeyResultRepository(std::shared_ptr<pqxx::connection> conn)
++        : conn_(std::move(conn)) {}
++
++    // -------------------------------------------------------------------------
++    // findById
++    // -------------------------------------------------------------------------
++    Result<std::optional<KeyResult>> findById(const KeyResultId& id) const override {
++        try {
++            pqxx::work tx{*conn_};
++            auto rows = fetchWithLogs(tx,
++                "WHERE kr.id = $1",
++                id.value()
++            );
++            tx.commit();
++
++            if (rows.empty()) {
++                return Result<std::optional<KeyResult>>::ok(std::nullopt);
++            }
++            auto kr = assembleSingle(rows);
++            if (!kr) return Result<std::optional<KeyResult>>::err(kr.error());
++            return Result<std::optional<KeyResult>>::ok(
++                std::optional<KeyResult>{std::move(kr.value())}
++            );
++        } catch (const std::exception& e) {
++            return Result<std::optional<KeyResult>>::err(
++                "PgKeyResultRepository::findById: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findByObjectiveId
++    // -------------------------------------------------------------------------
++    Result<std::vector<KeyResult>> findByObjectiveId(
++        const ObjectiveId& objectiveId
++    ) const override {
++        try {
++            pqxx::work tx{*conn_};
++            auto rows = fetchWithLogs(tx,
++                "WHERE kr.objective_id = $1 ORDER BY kr.display_order ASC, log.recorded_at ASC",
++                objectiveId.value()
++            );
++            tx.commit();
++
++            return assembleMany(rows);
++        } catch (const std::exception& e) {
++            return Result<std::vector<KeyResult>>::err(
++                "PgKeyResultRepository::findByObjectiveId: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findByOwnerId
++    // -------------------------------------------------------------------------
++    Result<std::vector<KeyResult>> findByOwnerId(const UserId& ownerId) const override {
++        try {
++            pqxx::work tx{*conn_};
++            auto rows = fetchWithLogs(tx,
++                "WHERE kr.owner_id = $1 ORDER BY kr.created_at ASC, log.recorded_at ASC",
++                ownerId.value()
++            );
++            tx.commit();
++
++            return assembleMany(rows);
++        } catch (const std::exception& e) {
++            return Result<std::vector<KeyResult>>::err(
++                "PgKeyResultRepository::findByOwnerId: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // save (upsert)
++    // KeyResult を upsert したあと、progressLogs_ を追記（ON CONFLICT DO NOTHING）
++    // -------------------------------------------------------------------------
++    Result<void> save(const KeyResult& kr) override {
++        try {
++            pqxx::work tx{*conn_};
++
++            // 1. key_results upsert
++            if (std::holds_alternative<NumericProgress>(kr.progress())) {
++                const auto& np = std::get<NumericProgress>(kr.progress());
++                tx.exec_params(
++                    "INSERT INTO key_results "
++                    "    (id, objective_id, owner_id, title, kr_type, "
++                    "     target_value, current_value, is_completed, display_order) "
++                    "VALUES ($1, $2, $3, $4, 'numeric', $5, $6, FALSE, $7) "
++                    "ON CONFLICT (id) DO UPDATE SET "
++                    "    objective_id  = EXCLUDED.objective_id, "
++                    "    owner_id      = EXCLUDED.owner_id, "
++                    "    title         = EXCLUDED.title, "
++                    "    target_value  = EXCLUDED.target_value, "
++                    "    current_value = EXCLUDED.current_value, "
++                    "    display_order = EXCLUDED.display_order",
++                    kr.id().value(),
++                    kr.objectiveId().value(),
++                    kr.ownerId().value(),
++                    kr.title(),
++                    np.targetValue(),
++                    np.currentValue(),
++                    kr.displayOrder()
++                );
++            } else {
++                const auto& cp = std::get<CheckboxProgress>(kr.progress());
++                tx.exec_params(
++                    "INSERT INTO key_results "
++                    "    (id, objective_id, owner_id, title, kr_type, "
++                    "     target_value, current_value, is_completed, display_order) "
++                    "VALUES ($1, $2, $3, $4, 'checkbox', NULL, 0, $5, $6) "
++                    "ON CONFLICT (id) DO UPDATE SET "
++                    "    objective_id  = EXCLUDED.objective_id, "
++                    "    owner_id      = EXCLUDED.owner_id, "
++                    "    title         = EXCLUDED.title, "
++                    "    is_completed  = EXCLUDED.is_completed, "
++                    "    display_order = EXCLUDED.display_order",
++                    kr.id().value(),
++                    kr.objectiveId().value(),
++                    kr.ownerId().value(),
++                    kr.title(),
++                    cp.isCompleted(),
++                    kr.displayOrder()
++                );
++            }
++
++            // 2. KrProgressLog を追記（既存ログは変更しない）
++            for (const auto& log : kr.progressLogs()) {
++                saveProgressLog(tx, log);
++            }
++
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgKeyResultRepository::save: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // remove
++    // kr_progress_logs は ON DELETE CASCADE で自動削除される
++    // -------------------------------------------------------------------------
++    Result<void> remove(const KeyResultId& id) override {
++        try {
++            pqxx::work tx{*conn_};
++            tx.exec_params(
++                "DELETE FROM key_results WHERE id = $1",
++                id.value()
++            );
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgKeyResultRepository::remove: " + std::string(e.what())
++            );
++        }
++    }
++
++private:
++    std::shared_ptr<pqxx::connection> conn_;
++
++    // -------------------------------------------------------------------------
++    // SQL ヘルパー：key_results LEFT JOIN kr_progress_logs で一括取得
++    // -------------------------------------------------------------------------
++    pqxx::result fetchWithLogs(
++        pqxx::work& tx,
++        const std::string& whereClause,
++        const std::string& param
++    ) const {
++        const std::string sql =
++            "SELECT "
++            "    kr.id              AS kr_id, "
++            "    kr.objective_id    AS kr_objective_id, "
++            "    kr.owner_id        AS kr_owner_id, "
++            "    kr.title           AS kr_title, "
++            "    kr.kr_type         AS kr_type, "
++            "    kr.target_value    AS kr_target_value, "
++            "    kr.current_value   AS kr_current_value, "
++            "    kr.is_completed    AS kr_is_completed, "
++            "    kr.display_order   AS kr_display_order, "
++            "    kr.created_at::TEXT AS kr_created_at, "
++            "    kr.updated_at::TEXT AS kr_updated_at, "
++            "    log.id             AS log_id, "
++            "    log.recorded_by    AS log_recorded_by, "
++            "    log.value          AS log_value, "
++            "    log.completed      AS log_completed, "
++            "    log.note           AS log_note, "
++            "    log.recorded_at::TEXT AS log_recorded_at "
++            "FROM key_results kr "
++            "LEFT JOIN kr_progress_logs log ON log.key_result_id = kr.id "
++            + whereClause;
++        return tx.exec_params(sql, param);
++    }
++
++    // -------------------------------------------------------------------------
++    // 行群から KeyResult 1件を組み立てる（findById 用）
++    // -------------------------------------------------------------------------
++    static Result<KeyResult> assembleSingle(const pqxx::result& rows) {
++        // すべての行は同じ kr_id を持つ
++        auto krResult = reconstructKeyResult(rows[0]);
++        if (!krResult) return krResult;
++
++        std::vector<KrProgressLog> logs;
++        for (const auto& row : rows) {
++            if (row["log_id"].is_null()) continue;  // LEFT JOIN で log なし
++            auto logResult = reconstructLog(row);
++            if (!logResult) return Result<KeyResult>::err(logResult.error());
++            logs.push_back(std::move(logResult.value()));
++        }
++        krResult.value().setProgressLogs(std::move(logs));
++        return krResult;
++    }
++
++    // -------------------------------------------------------------------------
++    // 行群から KeyResult 複数件を組み立てる（findByXxx 用）
++    // kr_id でグルーピングしながら順序を保持する
++    // -------------------------------------------------------------------------
++    static Result<std::vector<KeyResult>> assembleMany(const pqxx::result& rows) {
++        // 出現順を保持するため、ID の出現順リストと map を併用する
++        std::vector<std::string> order;
++        std::unordered_map<std::string, pqxx::result::size_type> firstRowIdx;
++        std::unordered_map<std::string, std::vector<std::size_t>> logRowIdxMap;
++
++        for (pqxx::result::size_type i = 0; i < rows.size(); ++i) {
++            const std::string krId = rows[i]["kr_id"].as<std::string>();
++            if (firstRowIdx.find(krId) == firstRowIdx.end()) {
++                firstRowIdx[krId] = i;
++                order.push_back(krId);
++            }
++            if (!rows[i]["log_id"].is_null()) {
++                logRowIdxMap[krId].push_back(static_cast<std::size_t>(i));
++            }
++        }
++
++        std::vector<KeyResult> result;
++        result.reserve(order.size());
++
++        for (const auto& krId : order) {
++            auto krResult = reconstructKeyResult(rows[firstRowIdx[krId]]);
++            if (!krResult) return Result<std::vector<KeyResult>>::err(krResult.error());
++
++            std::vector<KrProgressLog> logs;
++            if (logRowIdxMap.count(krId)) {
++                for (auto rowIdx : logRowIdxMap[krId]) {
++                    auto logResult = reconstructLog(rows[rowIdx]);
++                    if (!logResult) {
++                        return Result<std::vector<KeyResult>>::err(logResult.error());
++                    }
++                    logs.push_back(std::move(logResult.value()));
++                }
++            }
++            krResult.value().setProgressLogs(std::move(logs));
++            result.push_back(std::move(krResult.value()));
++        }
++        return Result<std::vector<KeyResult>>::ok(std::move(result));
++    }
++
++    // -------------------------------------------------------------------------
++    // DB 行 → KeyResult エンティティ再構築（progress_logs は別途セット）
++    // -------------------------------------------------------------------------
++    static Result<KeyResult> reconstructKeyResult(const pqxx::row& row) {
++        auto idResult = KeyResultId::create(row["kr_id"].as<std::string>());
++        if (!idResult) return Result<KeyResult>::err(idResult.error());
++
++        auto objectiveIdResult = ObjectiveId::create(row["kr_objective_id"].as<std::string>());
++        if (!objectiveIdResult) return Result<KeyResult>::err(objectiveIdResult.error());
++
++        auto ownerIdResult = UserId::create(row["kr_owner_id"].as<std::string>());
++        if (!ownerIdResult) return Result<KeyResult>::err(ownerIdResult.error());
++
++        // KeyResultProgress の再構築
++        const std::string krType = row["kr_type"].as<std::string>();
++        KeyResultProgress progress = [&]() -> KeyResultProgress {
++            if (krType == "numeric") {
++                double target  = row["kr_target_value"].as<double>();
++                double current = row["kr_current_value"].as<double>();
++                auto np = NumericProgress::create(target, current);
++                // DB の CHECK 制約で保証済みのため、エラーは想定しない
++                return np.value();
++            } else {
++                bool completed = row["kr_is_completed"].as<bool>();
++                return CheckboxProgress::create(completed);
++            }
++        }();
++
++        auto krResult = KeyResult::create(
++            std::move(idResult.value()),
++            std::move(objectiveIdResult.value()),
++            std::move(ownerIdResult.value()),
++            row["kr_title"].as<std::string>(),
++            std::move(progress),
++            row["kr_display_order"].as<int>()
++        );
++        if (!krResult) return krResult;
++
++        krResult.value().setTimestamps(
++            row["kr_created_at"].as<std::string>(),
++            row["kr_updated_at"].as<std::string>()
++        );
++        return krResult;
++    }
++
++    // -------------------------------------------------------------------------
++    // DB 行 → KrProgressLog エンティティ再構築
++    // -------------------------------------------------------------------------
++    static Result<KrProgressLog> reconstructLog(const pqxx::row& row) {
++        auto logIdResult = KrProgressLogId::create(row["log_id"].as<std::string>());
++        if (!logIdResult) return Result<KrProgressLog>::err(logIdResult.error());
++
++        // kr_id は外部結合元から取得
++        auto krIdResult = KeyResultId::create(row["kr_id"].as<std::string>());
++        if (!krIdResult) return Result<KrProgressLog>::err(krIdResult.error());
++
++        auto recordedByResult = UserId::create(row["log_recorded_by"].as<std::string>());
++        if (!recordedByResult) return Result<KrProgressLog>::err(recordedByResult.error());
++
++        std::optional<std::string> note = std::nullopt;
++        if (!row["log_note"].is_null()) {
++            note = row["log_note"].as<std::string>();
++        }
++        const std::string recordedAt = row["log_recorded_at"].as<std::string>();
++
++        if (!row["log_value"].is_null()) {
++            // numeric ログ
++            return KrProgressLog::createNumeric(
++                std::move(logIdResult.value()),
++                std::move(krIdResult.value()),
++                std::move(recordedByResult.value()),
++                row["log_value"].as<double>(),
++                std::move(note),
++                recordedAt
++            );
++        } else {
++            // checkbox ログ
++            return KrProgressLog::createCheckbox(
++                std::move(logIdResult.value()),
++                std::move(krIdResult.value()),
++                std::move(recordedByResult.value()),
++                row["log_completed"].as<bool>(),
++                std::move(note),
++                recordedAt
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // KrProgressLog を DB に追記（既存ログは変更しない）
++    //
++    // libpqxx 7.x は std::optional<T> をパラメータとして受け付ける。
++    // nullopt を渡すと SQL の NULL として扱われる。
++    // recorded_at が空文字の場合は DEFAULT（NOW()）に任せるため列を省く SQL を使う。
++    // -------------------------------------------------------------------------
++    static void saveProgressLog(pqxx::work& tx, const KrProgressLog& log) {
++        // note は optional<string> をそのまま渡す（nullopt → NULL）
++        const std::optional<std::string>& note = log.note();
++
++        if (log.isNumeric()) {
++            if (log.recordedAt().empty()) {
++                tx.exec_params(
++                    "INSERT INTO kr_progress_logs "
++                    "    (id, key_result_id, recorded_by, value, completed, note) "
++                    "VALUES ($1, $2, $3, $4, NULL, $5) "
++                    "ON CONFLICT (id) DO NOTHING",
++                    log.id().value(),
++                    log.keyResultId().value(),
++                    log.recordedBy().value(),
++                    log.value().value(),   // double
++                    note                   // optional<string> → NULL if nullopt
++                );
++            } else {
++                tx.exec_params(
++                    "INSERT INTO kr_progress_logs "
++                    "    (id, key_result_id, recorded_by, value, completed, note, recorded_at) "
++                    "VALUES ($1, $2, $3, $4, NULL, $5, $6::TIMESTAMPTZ) "
++                    "ON CONFLICT (id) DO NOTHING",
++                    log.id().value(),
++                    log.keyResultId().value(),
++                    log.recordedBy().value(),
++                    log.value().value(),
++                    note,
++                    log.recordedAt()
++                );
++            }
++        } else {
++            if (log.recordedAt().empty()) {
++                tx.exec_params(
++                    "INSERT INTO kr_progress_logs "
++                    "    (id, key_result_id, recorded_by, value, completed, note) "
++                    "VALUES ($1, $2, $3, NULL, $4, $5) "
++                    "ON CONFLICT (id) DO NOTHING",
++                    log.id().value(),
++                    log.keyResultId().value(),
++                    log.recordedBy().value(),
++                    log.completed().value(),  // bool
++                    note
++                );
++            } else {
++                tx.exec_params(
++                    "INSERT INTO kr_progress_logs "
++                    "    (id, key_result_id, recorded_by, value, completed, note, recorded_at) "
++                    "VALUES ($1, $2, $3, NULL, $4, $5, $6::TIMESTAMPTZ) "
++                    "ON CONFLICT (id) DO NOTHING",
++                    log.id().value(),
++                    log.keyResultId().value(),
++                    log.recordedBy().value(),
++                    log.completed().value(),
++                    note,
++                    log.recordedAt()
++                );
++            }
++        }
++    }
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgObjectiveRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgObjectiveRepository.hpp"
+new file mode 100644
+index 0000000..8c10003
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgObjectiveRepository.hpp"
+@@ -0,0 +1,227 @@
++#pragma once
++
++#include <memory>
++#include <optional>
++#include <vector>
++#include <stdexcept>
++
++#include <pqxx/pqxx>
++
++#include "../../domain/repository/IObjectiveRepository.hpp"
++#include "../../domain/model/objective/Objective.hpp"
++#include "../../domain/model/objective/ObjectiveId.hpp"
++#include "../../domain/model/period/PeriodId.hpp"
++#include "../../domain/model/user/UserId.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// PgObjectiveRepository — IObjectiveRepository の PostgreSQL（libpqxx）実装
++//
++// インフラ層。pqxx::connection を shared_ptr で受け取る。
++//
++// SQL 方針:
++//   - save(): INSERT ... ON CONFLICT (id) DO UPDATE SET ...（upsert）
++//   - findByPeriodId(): display_order ASC でソート
++//   - description は NULL 許容（optional<string>）
++// =============================================================================
++class PgObjectiveRepository : public IObjectiveRepository {
++public:
++    explicit PgObjectiveRepository(std::shared_ptr<pqxx::connection> conn)
++        : conn_(std::move(conn)) {}
++
++    // -------------------------------------------------------------------------
++    // findById
++    // -------------------------------------------------------------------------
++    Result<std::optional<Objective>> findById(const ObjectiveId& id) const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec_params(
++                "SELECT id, period_id, owner_id, title, description, "
++                "       display_order, created_at::TEXT, updated_at::TEXT "
++                "FROM objectives WHERE id = $1",
++                id.value()
++            );
++            tx.commit();
++
++            if (rows.empty()) {
++                return Result<std::optional<Objective>>::ok(std::nullopt);
++            }
++            auto obj = reconstruct(rows[0]);
++            if (!obj) return Result<std::optional<Objective>>::err(obj.error());
++            return Result<std::optional<Objective>>::ok(
++                std::optional<Objective>{std::move(obj.value())}
++            );
++        } catch (const std::exception& e) {
++            return Result<std::optional<Objective>>::err(
++                "PgObjectiveRepository::findById: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findByPeriodId
++    // -------------------------------------------------------------------------
++    Result<std::vector<Objective>> findByPeriodId(const PeriodId& periodId) const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec_params(
++                "SELECT id, period_id, owner_id, title, description, "
++                "       display_order, created_at::TEXT, updated_at::TEXT "
++                "FROM objectives WHERE period_id = $1 "
++                "ORDER BY display_order ASC",
++                periodId.value()
++            );
++            tx.commit();
++
++            return collectObjectives(rows);
++        } catch (const std::exception& e) {
++            return Result<std::vector<Objective>>::err(
++                "PgObjectiveRepository::findByPeriodId: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findByOwnerId
++    // -------------------------------------------------------------------------
++    Result<std::vector<Objective>> findByOwnerId(const UserId& ownerId) const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec_params(
++                "SELECT id, period_id, owner_id, title, description, "
++                "       display_order, created_at::TEXT, updated_at::TEXT "
++                "FROM objectives WHERE owner_id = $1 "
++                "ORDER BY created_at ASC",
++                ownerId.value()
++            );
++            tx.commit();
++
++            return collectObjectives(rows);
++        } catch (const std::exception& e) {
++            return Result<std::vector<Objective>>::err(
++                "PgObjectiveRepository::findByOwnerId: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // save (upsert)
++    // -------------------------------------------------------------------------
++    Result<void> save(const Objective& objective) override {
++        try {
++            pqxx::work tx{*conn_};
++
++            // description は optional<string> なので NULL になりうる
++            if (objective.description().has_value()) {
++                tx.exec_params(
++                    "INSERT INTO objectives "
++                    "    (id, period_id, owner_id, title, description, display_order) "
++                    "VALUES ($1, $2, $3, $4, $5, $6) "
++                    "ON CONFLICT (id) DO UPDATE SET "
++                    "    period_id     = EXCLUDED.period_id, "
++                    "    owner_id      = EXCLUDED.owner_id, "
++                    "    title         = EXCLUDED.title, "
++                    "    description   = EXCLUDED.description, "
++                    "    display_order = EXCLUDED.display_order",
++                    objective.id().value(),
++                    objective.periodId().value(),
++                    objective.ownerId().value(),
++                    objective.title(),
++                    objective.description().value(),
++                    objective.displayOrder()
++                );
++            } else {
++                tx.exec_params(
++                    "INSERT INTO objectives "
++                    "    (id, period_id, owner_id, title, description, display_order) "
++                    "VALUES ($1, $2, $3, $4, NULL, $5) "
++                    "ON CONFLICT (id) DO UPDATE SET "
++                    "    period_id     = EXCLUDED.period_id, "
++                    "    owner_id      = EXCLUDED.owner_id, "
++                    "    title         = EXCLUDED.title, "
++                    "    description   = NULL, "
++                    "    display_order = EXCLUDED.display_order",
++                    objective.id().value(),
++                    objective.periodId().value(),
++                    objective.ownerId().value(),
++                    objective.title(),
++                    objective.displayOrder()
++                );
++            }
++
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgObjectiveRepository::save: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // remove
++    // -------------------------------------------------------------------------
++    Result<void> remove(const ObjectiveId& id) override {
++        try {
++            pqxx::work tx{*conn_};
++            tx.exec_params(
++                "DELETE FROM objectives WHERE id = $1",
++                id.value()
++            );
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgObjectiveRepository::remove: " + std::string(e.what())
++            );
++        }
++    }
++
++private:
++    std::shared_ptr<pqxx::connection> conn_;
++
++    // DB 行 → Objective エンティティ再構築
++    static Result<Objective> reconstruct(const pqxx::row& row) {
++        auto idResult = ObjectiveId::create(row["id"].as<std::string>());
++        if (!idResult) return Result<Objective>::err(idResult.error());
++
++        auto periodIdResult = PeriodId::create(row["period_id"].as<std::string>());
++        if (!periodIdResult) return Result<Objective>::err(periodIdResult.error());
++
++        auto ownerIdResult = UserId::create(row["owner_id"].as<std::string>());
++        if (!ownerIdResult) return Result<Objective>::err(ownerIdResult.error());
++
++        std::optional<std::string> description = std::nullopt;
++        if (!row["description"].is_null()) {
++            description = row["description"].as<std::string>();
++        }
++
++        auto objResult = Objective::create(
++            std::move(idResult.value()),
++            std::move(periodIdResult.value()),
++            std::move(ownerIdResult.value()),
++            row["title"].as<std::string>(),
++            std::move(description),
++            row["display_order"].as<int>()
++        );
++        if (!objResult) return objResult;
++
++        objResult.value().setTimestamps(
++            row["created_at"].as<std::string>(),
++            row["updated_at"].as<std::string>()
++        );
++        return objResult;
++    }
++
++    // pqxx::result → vector<Objective> への変換（共通処理）
++    static Result<std::vector<Objective>> collectObjectives(const pqxx::result& rows) {
++        std::vector<Objective> objectives;
++        objectives.reserve(rows.size());
++        for (const auto& row : rows) {
++            auto obj = reconstruct(row);
++            if (!obj) return Result<std::vector<Objective>>::err(obj.error());
++            objectives.push_back(std::move(obj.value()));
++        }
++        return Result<std::vector<Objective>>::ok(std::move(objectives));
++    }
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgUserRepository.hpp" "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgUserRepository.hpp"
+new file mode 100644
+index 0000000..0790335
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/infrastructure/repository/PgUserRepository.hpp"
+@@ -0,0 +1,189 @@
++#pragma once
++
++#include <memory>
++#include <optional>
++#include <vector>
++#include <stdexcept>
++
++#include <pqxx/pqxx>
++
++#include "../../domain/repository/IUserRepository.hpp"
++#include "../../domain/model/user/User.hpp"
++#include "../../domain/model/user/UserId.hpp"
++#include "../../domain/model/user/Email.hpp"
++#include "../../common/Result.hpp"
++
++// =============================================================================
++// PgUserRepository — IUserRepository の PostgreSQL（libpqxx）実装
++//
++// インフラ層。pqxx::connection を shared_ptr で受け取り、
++// 各メソッドでトランザクションを開いて操作する。
++//
++// SQL 方針:
++//   - save(): INSERT ... ON CONFLICT (id) DO UPDATE SET ... (upsert)
++//   - remove(): 対象が存在しなくてもエラーにしない
++//   - タイムスタンプは DB 側の DEFAULT / トリガーに任せる
++// =============================================================================
++class PgUserRepository : public IUserRepository {
++public:
++    explicit PgUserRepository(std::shared_ptr<pqxx::connection> conn)
++        : conn_(std::move(conn)) {}
++
++    // -------------------------------------------------------------------------
++    // findById
++    // -------------------------------------------------------------------------
++    Result<std::optional<User>> findById(const UserId& id) const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec_params(
++                "SELECT id, name, email, password_hash, "
++                "       created_at::TEXT, updated_at::TEXT "
++                "FROM users WHERE id = $1",
++                id.value()
++            );
++            tx.commit();
++
++            if (rows.empty()) {
++                return Result<std::optional<User>>::ok(std::nullopt);
++            }
++            auto user = reconstruct(rows[0]);
++            if (!user) return Result<std::optional<User>>::err(user.error());
++            return Result<std::optional<User>>::ok(
++                std::optional<User>{std::move(user.value())}
++            );
++        } catch (const std::exception& e) {
++            return Result<std::optional<User>>::err(
++                "PgUserRepository::findById: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findByEmail
++    // -------------------------------------------------------------------------
++    Result<std::optional<User>> findByEmail(const Email& email) const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec_params(
++                "SELECT id, name, email, password_hash, "
++                "       created_at::TEXT, updated_at::TEXT "
++                "FROM users WHERE email = $1",
++                email.value()
++            );
++            tx.commit();
++
++            if (rows.empty()) {
++                return Result<std::optional<User>>::ok(std::nullopt);
++            }
++            auto user = reconstruct(rows[0]);
++            if (!user) return Result<std::optional<User>>::err(user.error());
++            return Result<std::optional<User>>::ok(
++                std::optional<User>{std::move(user.value())}
++            );
++        } catch (const std::exception& e) {
++            return Result<std::optional<User>>::err(
++                "PgUserRepository::findByEmail: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // findAll
++    // -------------------------------------------------------------------------
++    Result<std::vector<User>> findAll() const override {
++        try {
++            pqxx::work tx{*conn_};
++            pqxx::result rows = tx.exec(
++                "SELECT id, name, email, password_hash, "
++                "       created_at::TEXT, updated_at::TEXT "
++                "FROM users ORDER BY created_at ASC"
++            );
++            tx.commit();
++
++            std::vector<User> users;
++            users.reserve(rows.size());
++            for (const auto& row : rows) {
++                auto user = reconstruct(row);
++                if (!user) return Result<std::vector<User>>::err(user.error());
++                users.push_back(std::move(user.value()));
++            }
++            return Result<std::vector<User>>::ok(std::move(users));
++        } catch (const std::exception& e) {
++            return Result<std::vector<User>>::err(
++                "PgUserRepository::findAll: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // save (upsert)
++    // -------------------------------------------------------------------------
++    Result<void> save(const User& user) override {
++        try {
++            pqxx::work tx{*conn_};
++            tx.exec_params(
++                "INSERT INTO users (id, name, email, password_hash) "
++                "VALUES ($1, $2, $3, $4) "
++                "ON CONFLICT (id) DO UPDATE SET "
++                "    name          = EXCLUDED.name, "
++                "    email         = EXCLUDED.email, "
++                "    password_hash = EXCLUDED.password_hash",
++                user.id().value(),
++                user.name(),
++                user.email().value(),
++                user.passwordHash()
++            );
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgUserRepository::save: " + std::string(e.what())
++            );
++        }
++    }
++
++    // -------------------------------------------------------------------------
++    // remove
++    // -------------------------------------------------------------------------
++    Result<void> remove(const UserId& id) override {
++        try {
++            pqxx::work tx{*conn_};
++            tx.exec_params(
++                "DELETE FROM users WHERE id = $1",
++                id.value()
++            );
++            tx.commit();
++            return Result<void>::ok();
++        } catch (const std::exception& e) {
++            return Result<void>::err(
++                "PgUserRepository::remove: " + std::string(e.what())
++            );
++        }
++    }
++
++private:
++    std::shared_ptr<pqxx::connection> conn_;
++
++    // DB 行 → User エンティティ再構築
++    static Result<User> reconstruct(const pqxx::row& row) {
++        auto idResult = UserId::create(row["id"].as<std::string>());
++        if (!idResult) return Result<User>::err(idResult.error());
++
++        auto emailResult = Email::create(row["email"].as<std::string>());
++        if (!emailResult) return Result<User>::err(emailResult.error());
++
++        auto userResult = User::create(
++            std::move(idResult.value()),
++            row["name"].as<std::string>(),
++            std::move(emailResult.value()),
++            row["password_hash"].as<std::string>()
++        );
++        if (!userResult) return userResult;
++
++        userResult.value().setTimestamps(
++            row["created_at"].as<std::string>(),
++            row["updated_at"].as<std::string>()
++        );
++        return userResult;
++    }
++};
+diff --git "a/05_DDD\347\265\261\345\220\210/src/main.cpp" "b/05_DDD\347\265\261\345\220\210/src/main.cpp"
+new file mode 100644
+index 0000000..5f18ee9
+--- /dev/null
++++ "b/05_DDD\347\265\261\345\220\210/src/main.cpp"
+@@ -0,0 +1,133 @@
++// =============================================================================
++// main.cpp — PgRepository スモークテスト
++//
++// DevContainer 内で実行:
++//   cd /workspace/05_DDD統合
++//   make test
++//
++// または:
++//   bash /workspace/scripts/test.sh
++//
++// テスト内容:
++//   1. PostgreSQL 接続確認
++//   2. PgUserRepository::save / findById / findByEmail / findAll / remove
++//   3. PgObjectiveRepository / PgKeyResultRepository のインスタンス生成確認
++// =============================================================================
++
++#include <iostream>
++#include <memory>
++#include <cassert>
++#include <stdexcept>
++
++#include <pqxx/pqxx>
++
++#include "infrastructure/repository/PgUserRepository.hpp"
++#include "infrastructure/repository/PgObjectiveRepository.hpp"
++#include "infrastructure/repository/PgKeyResultRepository.hpp"
++
++// 接続文字列（環境変数 DATABASE_URL を優先）
++static std::string connectionString() {
++    const char* url = std::getenv("DATABASE_URL");
++    if (url && url[0] != '\0') return url;
++    return "postgresql://postgres:pass@postgres:5432/learning";
++}
++
++// ─── ヘルパー ────────────────────────────────────────────────────────────────
++template <typename T>
++T unwrap(Result<T> result, const std::string& label) {
++    if (!result) throw std::runtime_error(label + ": " + result.error());
++    return std::move(result.value());
++}
++
++void unwrapVoid(Result<void> result, const std::string& label) {
++    if (!result) throw std::runtime_error(label + ": " + result.error());
++}
++
++// ─── テスト 1: DB 接続確認 ───────────────────────────────────────────────────
++void testConnection(pqxx::connection& conn) {
++    std::cout << "[1] DB 接続確認... ";
++    pqxx::work tx{conn};
++    auto r = tx.exec("SELECT current_database()");
++    tx.commit();
++    std::cout << "✅  DB=" << r[0][0].as<std::string>() << "\n";
++}
++
++// ─── テスト 2: PgUserRepository CRUD ────────────────────────────────────────
++void testUserRepository(std::shared_ptr<pqxx::connection> conn) {
++    PgUserRepository repo{conn};
++    const std::string uuid = "11111111-1111-4111-a111-111111111111";
++
++    auto id    = UserId::create(uuid).value();
++    auto email = Email::create("smoke@example.com").value();
++
++    // クリーンアップ（冪等）
++    unwrapVoid(repo.remove(id), "remove(pre-cleanup)");
++
++    // save（新規）
++    std::cout << "[2] save (新規)... ";
++    unwrapVoid(repo.save(User::create(id, "スモークテスト太郎", email, "hash_xxx").value()), "save");
++    std::cout << "✅\n";
++
++    // findById
++    std::cout << "[3] findById... ";
++    auto found = unwrap(repo.findById(id), "findById");
++    assert(found.has_value() && found->name() == "スモークテスト太郎");
++    std::cout << "✅  name=" << found->name() << "\n";
++
++    // save（upsert 更新）
++    std::cout << "[4] save (更新)... ";
++    unwrapVoid(repo.save(User::create(id, "スモークテスト更新済み", email, "hash_yyy").value()), "save(update)");
++    auto updated = unwrap(repo.findById(id), "findById(after update)");
++    assert(updated.has_value() && updated->name() == "スモークテスト更新済み");
++    std::cout << "✅  name=" << updated->name() << "\n";
++
++    // findByEmail
++    std::cout << "[5] findByEmail... ";
++    auto byEmail = unwrap(repo.findByEmail(email), "findByEmail");
++    assert(byEmail.has_value() && byEmail->id() == id);
++    std::cout << "✅\n";
++
++    // findAll
++    std::cout << "[6] findAll... ";
++    auto all = unwrap(repo.findAll(), "findAll");
++    assert(!all.empty());
++    std::cout << "✅  count=" << all.size() << "\n";
++
++    // remove
++    std::cout << "[7] remove... ";
++    unwrapVoid(repo.remove(id), "remove");
++    auto gone = unwrap(repo.findById(id), "findById(after remove)");
++    assert(!gone.has_value());
++    std::cout << "✅\n";
++}
++
++// ─── テスト 3: Objective / KeyResult リポジトリ インスタンス生成確認 ─────────
++void testRepoInstantiation(std::shared_ptr<pqxx::connection> conn) {
++    std::cout << "[8] PgObjectiveRepository 生成... ";
++    PgObjectiveRepository objRepo{conn};
++    std::cout << "✅\n";
++
++    std::cout << "[9] PgKeyResultRepository 生成... ";
++    PgKeyResultRepository krRepo{conn};
++    std::cout << "✅\n";
++}
++
++// ─── main ────────────────────────────────────────────────────────────────────
++int main() {
++    std::cout << "========================================\n";
++    std::cout << " OKR Repository スモークテスト\n";
++    std::cout << "========================================\n";
++    try {
++        auto conn = std::make_shared<pqxx::connection>(connectionString());
++        testConnection(*conn);
++        testUserRepository(conn);
++        testRepoInstantiation(conn);
++        std::cout << "========================================\n";
++        std::cout << " ✅ 全テスト PASSED\n";
++        std::cout << "========================================\n";
++        return 0;
++    } catch (const std::exception& e) {
++        std::cerr << "\n❌ テスト失敗: " << e.what() << "\n";
++        return 1;
++    }
++}
+diff --git "a/05_DDD\347\265\261\345\220\210/src/presentation/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/presentation/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git "a/05_DDD\347\265\261\345\220\210/src/presentation/cli/.gitkeep" "b/05_DDD\347\265\261\345\220\210/src/presentation/cli/.gitkeep"
+new file mode 100644
+index 0000000..e69de29
+diff --git a/CLAUDE.md b/CLAUDE.md
+new file mode 100644
+index 0000000..b51ac4a
+--- /dev/null
++++ b/CLAUDE.md
+@@ -0,0 +1,194 @@
++# CLAUDE.md
++
++Claude Code がこのリポジトリで作業する際に参照するコンテキストファイル。
++
++---
++
++## プロジェクト概要
++
++OKR管理ツール（C++ × TypeScript × PostgreSQL）  
++チーム単位でOKRを管理するWebアプリケーション。DDD / クリーンアーキテクチャで実装する。
++
++---
++
++## 開発環境
++
++- OS: Windows（Git Bash）+ VSCode DevContainer
++- DevContainer: PostgreSQL 16 / Go 1.22 / Rust / Claude Code
++- 改行コード: LF 統一（.gitattributes で設定済み）
++- C++ 標準: C++17
++
++---
++
++## アーキテクチャ方針
++
++### DDD / クリーンアーキテクチャ
++
++```
++src/
++├── common/                         # 共通型（Result<T> など）
++├── domain/                         # ドメイン層（外部依存ゼロ）
++│   ├── model/                      # 値オブジェクト・エンティティ
++│   │   ├── user/
++│   │   ├── team/
++│   │   ├── period/
++│   │   ├── objective/
++│   │   └── keyresult/
++│   ├── service/                    # ドメインサービス
++│   └── repository/                 # Repositoryインターフェース（純粋仮想）
++├── application/                    # ユースケース層
++│   └── usecase/
++├── infrastructure/                 # インフラ層（libpqxx 実装）
++│   └── repository/
++└── presentation/                   # プレゼンテーション層
++    └── cli/
++```
++
++### レイヤールール
++
++- `domain/` は外部ライブラリに依存しない（STLのみ）
++- `infrastructure/` のみ libpqxx に依存する
++- 上位レイヤーから下位レイヤーへの依存のみ許可
++
++---
++
++## 実装方針
++
++### エラーハンドリング
++
++`std::expected`（C++23）の自前実装である `Result<T>` を使用する。例外は使わない。
++
++```cpp
++// 成功
++Result<UserId>::ok(UserId{value});
++
++// 失敗
++Result<UserId>::err("UserId: 無効なUUID形式です: " + value);
++
++// 使用側
++auto result = UserId::create("...");
++if (!result) { /* result.error() でメッセージ取得 */ }
++auto id = result.value();
++```
++
++### 値オブジェクト設計方針
++
++- イミュータブル（コンストラクタを private にしてファクトリパターン）
++- バリデーションはファクトリ（`create()`）で行い `Result<T>` を返す
++- 等価比較演算子（`==` / `!=`）を必ず実装する
++
++---
++
++## 実装状況
++
++### フェーズ1：値オブジェクト ✅
++
++| ファイル                                       | 内容                                  |
++| ---------------------------------------------- | ------------------------------------- |
++| `common/Result.hpp`                            | `Result<T>` / `Result<void>` 自前実装（in_place構築・void特殊化のok()名前衝突を修正済み） |
++| `common/UuidId.hpp`                            | 型安全UUID IDテンプレート `UuidId<Tag>`（フェーズ2で追加） |
++| `domain/model/user/UserId.hpp`                 | UUID v4 バリデーション                |
++| `domain/model/user/Email.hpp`                  | RFC5322 簡易検証・小文字正規化        |
++| `domain/model/team/Role.hpp`                   | `admin` / `member` 列挙型             |
++| `domain/model/period/Half.hpp`                 | `H1` / `H2` 列挙型                    |
++| `domain/model/period/DateRange.hpp`            | `start < end` 保証                    |
++| `domain/model/keyresult/KeyResultProgress.hpp` | `std::variant` による Union型         |
++
++### フェーズ2：エンティティ ✅
++
++- `User` / `Team` / `TeamMember`
++- `Period` / `Objective` / `KeyResult` / `KrProgressLog`
++
++### フェーズ3：Repositoryインターフェース ✅
++
++| ファイル                                                  | 内容                                      |
++| --------------------------------------------------------- | ----------------------------------------- |
++| `domain/repository/IUserRepository.hpp`                   | findById / findByEmail / findAll / save / remove |
++| `domain/repository/ITeamRepository.hpp`                   | findById / findByUserId / findAll / save / remove（TeamMember一括管理） |
++| `domain/repository/IPeriodRepository.hpp`                 | findById / findByTeamId / findAll / save / remove |
++| `domain/repository/IObjectiveRepository.hpp`              | findById / findByPeriodId / findByOwnerId / save / remove |
++| `domain/repository/IKeyResultRepository.hpp`              | findById / findByObjectiveId / findByOwnerId / save / remove（KrProgressLog一括管理） |
++
++### フェーズ4：libpqxx 実装 ✅
++
++| ファイル                                                      | 内容                                      |
++| ------------------------------------------------------------- | ----------------------------------------- |
++| `infrastructure/repository/PgUserRepository.hpp`              | findById / findByEmail / findAll / save（upsert）/ remove |
++| `infrastructure/repository/PgObjectiveRepository.hpp`         | findById / findByPeriodId / findByOwnerId / save（upsert）/ remove |
++| `infrastructure/repository/PgKeyResultRepository.hpp`         | findById / findByObjectiveId / findByOwnerId / save（KeyResult + KrProgressLog 一括）/ remove |
++
++### フェーズ5：Go (pgx) 実装 ✅
++
++配置先: `05_DDD統合/go/`
++
++| ファイル                                                      | 内容                                      |
++| ------------------------------------------------------------- | ----------------------------------------- |
++| `go.mod`                                                      | Go モジュール（pgx v5 依存）              |
++| `domain/model/user/user_id.go`                                | 値オブジェクト UserId（UUID v4バリデーション） |
++| `domain/model/user/email.go`                                  | 値オブジェクト Email（正規化・バリデーション） |
++| `domain/model/user/user.go`                                   | エンティティ User（集約ルート）           |
++| `domain/repository/user_repository.go`                        | インターフェース UserRepository           |
++| `infrastructure/repository/pg_user_repository.go`             | FindByID / FindByEmail / FindAll / Save（upsert）/ Remove |
++| `cmd/smoke/main.go`                                           | スモークテスト（C++ 版と同等の CRUD 確認）|
++
++**C++ との主な対応:**
++- `Result<T>` → `(T, error)` の多値返却
++- `std::optional<T>` → `*T`（nilポインタ）
++- `pqxx::connection` → `pgxpool.Pool`
++
++---
++
++## DBスキーマ
++
++- ファイル: `05_DDD統合/schema.sql`
++- 設計書: `05_DDD統合/schema.md`
++- ドメインモデル: `05_DDD統合/docs/domain-model.md`
++- PostgreSQL 16 / uuid-ossp 拡張使用
++- `updated_at` はトリガーで自動更新
++
++### 主要テーブル
++
++| テーブル                           | 集約                 |
++| ---------------------------------- | -------------------- |
++| `users`                            | User 集約ルート      |
++| `teams` + `team_members`           | Team 集約            |
++| `periods`                          | Period 集約ルート    |
++| `objectives`                       | Objective 集約ルート |
++| `key_results` + `kr_progress_logs` | KeyResult 集約       |
++
++---
++
++## ユビキタス言語
++
++| 日本語         | 英語        | 説明                      |
++| -------------- | ----------- | ------------------------- |
++| ユーザー       | User        | システム利用者            |
++| チーム         | Team        | OKRを共有するグループ     |
++| チームメンバー | TeamMember  | チームに所属するUser      |
++| ロール         | Role        | admin / member            |
++| 期間           | Period      | 半期単位のOKRサイクル     |
++| 目標           | Objective   | 定性的な目標（OのO）      |
++| 主要な結果     | KeyResult   | 達成度を測る指標（KR）    |
++| 進捗ログ       | ProgressLog | KRの時系列履歴            |
++| オーナー       | Owner       | ObjectiveまたはKRの責任者 |
++
++---
++
++## コミット規則
++
++```
++feat:  機能追加
++fix:   バグ修正
++chore: 構成・設定変更（コードなし）
++docs:  ドキュメントのみ
++test:  テストのみ
++```
++
++コミットメッセージは `git commit`（`-m` なし）でVSCodeエディタを開いて記述する。
++
++---
++
++## 関連リンク
++
++- GitHub: https://github.com/tsuzudev05/rdb-learning-postgres
++- Zenn: https://zenn.dev/tsuzudev05
+\ No newline at end of file
+diff --git a/docs/testing.md b/docs/testing.md
+new file mode 100644
+index 0000000..4a30a3a
+--- /dev/null
++++ b/docs/testing.md
+@@ -0,0 +1,184 @@
++# テスト手順書
++
++## 概要
++
++このプロジェクトでは DevContainer 内で C++ スモークテストを実行する。  
++テスト対象は `05_DDD統合/src/infrastructure/repository/` の libpqxx 実装（フェーズ4）。
++
++---
++
++## 前提条件
++
++- Docker Desktop が起動していること
++- VSCode の Dev Containers 拡張機能がインストールされていること
++
++---
++
++## 初回セットアップ
++
++### 1. DevContainer を起動する
++
++VSCode でプロジェクトを開き、コマンドパレット（`Ctrl+Shift+P`）から実行：
++
++```
++Dev Containers: Rebuild and Reopen in Container
++```
++
++> 初回はイメージのビルドに数分かかります。
++
++### 2. セットアップスクリプトの確認
++
++`postCreateCommand` により自動実行されるが、手動で再実行する場合：
++
++```bash
++bash /workspace/.devcontainer/setup.sh
++```
++
++セットアップが完了すると以下が確認できる：
++
++```
++✅ Git設定完了
++✅ PostgreSQL に接続できました
++✅ DDD スキーマ投入完了
++✅ C++ ビルドディレクトリ準備完了
++
++📌 インストール済みツール：
++  g++     : g++ (Ubuntu ...) 13.x.x
++  make    : GNU Make 4.x
++  libpqxx : 7.x.x (または 6.4.5)
++  ...
++```
++
++---
++
++## テストの実行
++
++### 方法 A — テストスクリプト（推奨）
++
++```bash
++bash /workspace/scripts/test.sh
++```
++
++### 方法 B — Makefile を直接使う
++
++```bash
++cd /workspace/05_DDD統合
++make test
++```
++
++### 方法 C — ステップごとに実行
++
++```bash
++cd /workspace/05_DDD統合
++
++# ビルドのみ
++make build
++
++# ビルド済みバイナリを直接実行
++DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning \
++  ./build/okr_smoke_test
++```
++
++---
++
++## テスト内容
++
++| # | テスト名 | 内容 |
++|---|---|---|
++| 1 | DB 接続確認 | `current_database()` を取得して接続を確認 |
++| 2 | save（新規） | User を INSERT して保存 |
++| 3 | findById | ID で User を取得・内容を検証 |
++| 4 | save（更新） | 同一 ID で upsert し、名前変更を確認 |
++| 5 | findByEmail | メールアドレスで User を取得 |
++| 6 | findAll | 全 User 件数が 1 件以上あることを確認 |
++| 7 | remove | User を削除し、findById が nullopt を返すことを確認 |
++| 8 | ObjectiveRepository 生成 | インスタンス生成のみ確認 |
++| 9 | KeyResultRepository 生成 | インスタンス生成のみ確認 |
++
++---
++
++## 成功時の出力
++
++```
++========================================
++ C++ スモークテスト
++========================================
++[事前確認] PostgreSQL 接続確認...
++✅ DB 接続 OK
++
++[1/2] C++ ビルド中...
++✅ ビルド成功: ./build/okr_smoke_test
++
++[2/2] スモークテスト実行中...
++========================================
++ OKR Repository スモークテスト
++========================================
++[1] DB 接続確認... ✅  DB=learning
++[2] save (新規)... ✅
++[3] findById... ✅  name=スモークテスト太郎
++[4] save (更新)... ✅  name=スモークテスト更新済み
++[5] findByEmail... ✅
++[6] findAll... ✅  count=1
++[7] remove... ✅
++[8] PgObjectiveRepository 生成... ✅
++[9] PgKeyResultRepository 生成... ✅
++========================================
++ ✅ 全テスト PASSED
++========================================
++```
++
++---
++
++## トラブルシューティング
++
++### PostgreSQL に接続できない
++
++```bash
++# コンテナの起動状態を確認
++pg_isready -h postgres -U postgres -d learning
++
++# DevContainer を再起動
++# VSCode: Ctrl+Shift+P → "Dev Containers: Rebuild and Reopen in Container"
++```
++
++### コンパイルエラー
++
++```bash
++# libpqxx のバージョン確認
++pkg-config --modversion libpqxx
++
++# g++ のバージョン確認
++g++ --version
++```
++
++### ビルドディレクトリが存在しない
++
++```bash
++mkdir -p /workspace/05_DDD統合/build
++```
++
++---
++
++## ファイル構成
++
++```
++rdb-learning-postgres/
++├── .devcontainer/
++│   ├── Dockerfile          # build-essential / libpqxx-dev / libpq-dev を含む
++│   ├── docker-compose.yml  # app + postgres サービス定義
++│   └── setup.sh            # 初回セットアップスクリプト
++├── 05_DDD統合/
++│   ├── Makefile            # make build / make test
++│   ├── schema.sql          # DB スキーマ（初回セットアップ時に投入）
++│   └── src/
++│       ├── main.cpp        # スモークテスト本体
++│       └── infrastructure/
++│           └── repository/
++│               ├── PgUserRepository.hpp
++│               ├── PgObjectiveRepository.hpp
++│               └── PgKeyResultRepository.hpp
++├── docs/
++│   └── testing.md          # 本ファイル
++└── scripts/
++    └── test.sh             # テスト実行スクリプト
++```
+diff --git a/scripts/test.sh b/scripts/test.sh
+new file mode 100644
+index 0000000..8789d1f
+--- /dev/null
++++ b/scripts/test.sh
+@@ -0,0 +1,38 @@
++#!/bin/bash
++# =============================================================================
++# test.sh — C++ スモークテスト実行スクリプト
++# DevContainer 内で実行する。
++#
++# 使い方:
++#   bash /workspace/scripts/test.sh
++# =============================================================================
++set -e
++
++WORKSPACE=/workspace
++DDD_DIR=$WORKSPACE/05_DDD統合
++
++echo "========================================"
++echo " C++ スモークテスト"
++echo "========================================"
++
++# ─── DB 接続確認 ───
++echo "[事前確認] PostgreSQL 接続確認..."
++pg_isready -h postgres -U postgres -d learning \
++  || { echo "❌ PostgreSQL に接続できません。DevContainer を再起動してください。"; exit 1; }
++echo "✅ DB 接続 OK"
++echo ""
++
++# ─── ビルド ───
++echo "[1/2] C++ ビルド中..."
++cd "$DDD_DIR"
++make build
++echo ""
++
++# ─── テスト実行 ───
++echo "[2/2] スモークテスト実行中..."
++make test
++
++echo ""
++echo "========================================"
++echo " 完了"
++echo "========================================"
