@@ -175,7 +175,7 @@ def generate_review(diff: str, pr_title: str, base: str, head: str) -> tuple[str
     Claude Haiku を呼び出してレビューを生成する。
     戻り値: (レビュー本文, input_tokens, output_tokens)
     """
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"].strip())
 
     user_message = f"""以下の Pull Request をレビューしてください。
 
