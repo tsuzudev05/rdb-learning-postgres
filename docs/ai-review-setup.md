@@ -1,6 +1,6 @@
 # AI コードレビュー セットアップ手順
 
-GitHub Actions + Gemini 1.5 Flash で PR を自動レビューする仕組みのセットアップ手順。  
+GitHub Actions + Gemini 2.0 Flash Lite で PR を自動レビューする仕組みのセットアップ手順。  
 任意のリポジトリに導入できる。参考実装: [rdb-learning-postgres](https://github.com/tsuzudev05/rdb-learning-postgres)
 
 ---
@@ -10,8 +10,8 @@ GitHub Actions + Gemini 1.5 Flash で PR を自動レビューする仕組みの
 | 項目 | 内容 |
 |---|---|
 | トリガー | PR の open / synchronize / reopened |
-| モデル | Gemini 1.5 Flash (`gemini-1.5-flash`) |
-| コスト | 無料枠 15 RPM / 1,500 リクエスト/日（個人利用なら実質無料） |
+| モデル | Gemini 2.0 Flash Lite (`gemini-2.0-flash-lite`) |
+| コスト | 無料枠 1,500 リクエスト/日（個人利用なら実質無料） |
 | コスト制限 | 月 $1.00 上限（無料枠超過後の安全網） |
 | レビュー言語 | 日本語 |
 
@@ -91,7 +91,7 @@ git push origin main
 4. Actions が成功したら PR の**コメント欄**に以下の形式でレビューが投稿される
 
    ```
-   ## 🤖 AI コードレビュー（Gemini 1.5 Flash）
+   ## 🤖 AI コードレビュー（Gemini 2.0 Flash Lite）
    ### 概要
    ...
    ### ✅ 良い点
@@ -143,11 +143,11 @@ git push origin main
 
 ## コスト見積もり
 
-Gemini 1.5 Flash の料金（2025年時点）:
+Gemini 2.0 Flash Lite の料金（2025年時点）:
 
 | 項目 | 無料枠 | 有料（超過後） |
 |---|---|---|
-| リクエスト数 | 15 RPM / 1,500 回/日 | — |
+| リクエスト数 | 1,500 回/日 | — |
 | 入力トークン | — | $0.075 / 1M tokens |
 | 出力トークン | — | $0.30 / 1M tokens |
 
