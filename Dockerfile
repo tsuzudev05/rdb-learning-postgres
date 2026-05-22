@@ -19,14 +19,13 @@ RUN apt-get update && apt-get install -y \
 
 # ─────────────────────────────────────────
 # Step 2: Node.js 20（Claude Code の実行に必要）
-# apt-get と分けて実行する必要がある
 # ─────────────────────────────────────────
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ─────────────────────────────────────────
-# Step 3: Claude Code（Node.js インストール後に実行）
+# Step 3: Claude Code
 # ─────────────────────────────────────────
 RUN npm install -g @anthropic-ai/claude-code
 

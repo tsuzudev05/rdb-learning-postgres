@@ -1,0 +1,66 @@
+name: AI Code Review (Groq)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # PR へのコメント投稿に必要
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # diff 取得のために全履歴が必要
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install groq
+
+      - name: Get current year-month
+        run: echo "YEAR_MONTH=$(date +'%Y-%m')" >> $GITHUB_ENV
+
+      - name: Restore monthly usage cache
+        uses: actions/cache@v4
+        with:
+          path: .monthly-usage.json
+          key: ai-review-cost-${{ env.YEAR_MONTH }}
+          restore-keys: |
+            ai-review-cost-
+
+      - name: Generate diff
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD \
+            -- . \
+            ':(exclude)*.sum' \
+            ':(exclude)*.lock' \
+            ':(exclude)node_modules/**' \
+            ':(exclude).gitkeep' \
+            > diff.txt
+          echo "diff lines: $(wc -l < diff.txt)"
+
+      - name: Run AI Review
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: python scripts/ai_review.py
+
+      - name: Save monthly usage cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .monthly-usage.json
+          key: ai-review-cost-${{ env.YEAR_MONTH }}
