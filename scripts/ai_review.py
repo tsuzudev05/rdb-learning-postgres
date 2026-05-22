@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ai_review.py — PR diff を Groq（Llama 3.3 70B）に渡してコードレビューを生成し、
-               GitHub PR にコメントとして投稿するスクリプト。
+               GitHub PR にインラインコメント + サマリーとして投稿するスクリプト。
 
 Groq 無料枠: 14,400 req/日・30 RPM（クレジットカード不要）
 
@@ -33,21 +33,18 @@ from groq import Groq
 DIFF_FILE      = "diff.txt"
 USAGE_FILE     = ".monthly-usage.json"
 MAX_DIFF_CHARS = 25_000   # Groq 無料枠 12,000 TPM 制限に合わせた上限
-                          # 80,000文字 → ~27,000トークンで超過するため縮小
 MODEL          = "llama-3.3-70b-versatile"
 
-# Groq 無料枠は $0。有料プランの参考単価（2025年時点）
-PRICE_INPUT_PER_MTOK  = 0.59   # USD / million tokens
-PRICE_OUTPUT_PER_MTOK = 0.79   # USD / million tokens
+PRICE_INPUT_PER_MTOK  = 0.59
+PRICE_OUTPUT_PER_MTOK = 0.79
 
-MONTHLY_BUDGET_USD = 1.00   # 有料転換時の安全網（無料枠内なら実際には課金されない）
+MONTHLY_BUDGET_USD = 1.00
 BUDGET_WARN_RATIO  = 0.80
 
 
 # ─── コスト計算 ──────────────────────────────────────────────────────────────
 
 def calc_cost(input_tokens: int, output_tokens: int) -> float:
-    """トークン数から USD コストを計算する（Groq 有料プラン料金。無料枠内は $0）。"""
     return (
         input_tokens  / 1_000_000 * PRICE_INPUT_PER_MTOK
         + output_tokens / 1_000_000 * PRICE_OUTPUT_PER_MTOK
@@ -87,11 +84,10 @@ def check_budget(usage: dict) -> tuple[bool, str]:
     ratio        = current_cost / MONTHLY_BUDGET_USD
 
     if ratio >= 1.0:
-        msg = (
+        return False, (
             f"⚠️ **月次コスト上限に達しました**（${current_cost:.4f} / ${MONTHLY_BUDGET_USD:.2f}）。"
-            f"AIレビューをスキップしました。来月リセットされます。"
+            "AIレビューをスキップしました。来月リセットされます。"
         )
-        return False, msg
 
     warn = ""
     if ratio >= BUDGET_WARN_RATIO:
@@ -102,41 +98,91 @@ def check_budget(usage: dict) -> tuple[bool, str]:
     return True, warn
 
 
+# ─── diff パーサー ────────────────────────────────────────────────────────────
+
+def parse_diff(diff: str) -> dict[str, list[int]]:
+    """
+    diff から変更されたファイルと追加行の行番号を抽出する。
+    戻り値: {ファイルパス: [変更後の行番号, ...]}
+    インラインコメントは変更行のみに付けられるため、この情報を AI に渡す。
+    """
+    changed: dict[str, list[int]] = {}
+    current_file: str | None = None
+    current_line = 0
+
+    for line in diff.split("\n"):
+        if line.startswith("diff --git "):
+            # "diff --git a/foo.go b/foo.go" → "foo.go"
+            parts = line.split(" b/", 1)
+            current_file = parts[1].strip() if len(parts) > 1 else None
+            if current_file:
+                changed.setdefault(current_file, [])
+
+        elif line.startswith("@@ ") and current_file:
+            # "@@ -old_start,old_count +new_start,new_count @@"
+            m = re.search(r"\+(\d+)", line)
+            current_line = int(m.group(1)) if m else 0
+
+        elif current_file:
+            if line.startswith("+++") or line.startswith("---"):
+                pass  # ヘッダー行は無視
+            elif line.startswith("+"):
+                changed[current_file].append(current_line)
+                current_line += 1
+            elif line.startswith("-"):
+                pass  # 削除行は新ファイルの行番号に影響しない
+            elif not line.startswith("\\"):
+                current_line += 1  # コンテキスト行
+
+    # 変更行が1つもないファイルは除外
+    return {f: lines for f, lines in changed.items() if lines}
+
+
 # ─── プロンプト ───────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """あなたは DDD（ドメイン駆動設計）・C++17・Go・PostgreSQL に詳しいシニアエンジニアです。
-Pull Request の diff をレビューし、以下の観点で日本語でフィードバックしてください。
+def build_system_prompt(changed_files: dict[str, list[int]]) -> str:
+    """変更ファイルと行番号の情報を含むシステムプロンプトを生成する。"""
+    file_info_lines = []
+    for path, lines in changed_files.items():
+        # 行番号が多すぎる場合は省略して見やすくする
+        if len(lines) > 20:
+            shown = lines[:20]
+            file_info_lines.append(f"  {path}: 行 {shown}... (他 {len(lines)-20} 行)")
+        else:
+            file_info_lines.append(f"  {path}: 行 {lines}")
+    file_info = "\n".join(file_info_lines) if file_info_lines else "  （変更ファイルなし）"
 
-レビュー観点:
+    return f"""あなたは DDD（ドメイン駆動設計）・C++17・Go・PostgreSQL に詳しいシニアエンジニアです。
+Pull Request の diff をレビューし、**必ず以下の JSON 形式のみ**で回答してください。
+JSON 以外のテキスト（説明文・前置き・コードブロック記号）は一切含めないこと。
+
+{{
+  "summary": "## 🤖 AI コードレビュー（Llama 3.3 70B / Groq）\\n\\n### 概要\\n（2〜3行）\\n\\n### ✅ 良い点\\n- ...\\n\\n### 🔴 要修正\\n（なければ「なし」）\\n\\n### 🟡 改善提案\\n- ...\\n\\n### 📊 総評\\nLGTM / 要修正 / 要確認\\n\\n---\\n*このレビューは Llama 3.3 70B（Groq）によって自動生成されました。*",
+  "comments": [
+    {{
+      "path": "ファイルパス",
+      "line": 行番号（整数）,
+      "body": "指摘内容"
+    }}
+  ]
+}}
+
+## インラインコメントのルール
+- `comments` には具体的なコードの問題点のみ記載する（アーキテクチャ全体への指摘は `summary` に書く）
+- `path` と `line` は**以下の変更ファイル一覧に含まれるもののみ**使用すること
+- 一覧にない path・line を指定するとコメント投稿が失敗するため厳守する
+- 特定行への指摘がない場合は `comments` を空配列 `[]` にする
+
+## 変更ファイルと変更行番号の一覧
+{file_info}
+
+## レビュー観点
 - コードの正確性・バグの可能性
-- DDD / クリーンアーキテクチャの原則への準拠（集約・値オブジェクト・Repository の分離など）
+- DDD / クリーンアーキテクチャの原則への準拠
 - C++17 / Go のイディオムへの準拠
-- セキュリティリスク（SQL インジェクション・認証情報の露出など）
+- セキュリティリスク（SQLインジェクション・認証情報の露出など）
 - パフォーマンス上の懸念
-- テストの考慮事項
-- 改善提案（必須ではないが有益なもの）
-
-出力フォーマット（Markdown）:
-## 🤖 AI コードレビュー（Llama 3.3 70B / Groq）
-
-### 概要
-（PR で何をしているかを 2〜3 行で要約）
-
-### ✅ 良い点
-（箇条書き）
-
-### 🔴 要修正
-（深刻な問題があれば記載。なければ「なし」）
-
-### 🟡 改善提案
-（任意だが推奨する変更点）
-
-### 📊 総評
-（一言でマージ可否の判断：LGTM / 要修正 / 要確認）
-
----
-*このレビューは Llama 3.3 70B（Groq）によって自動生成されました。*
-"""
+- テストの考慮事項"""
 
 
 # ─── diff 読み込み ────────────────────────────────────────────────────────────
@@ -162,10 +208,27 @@ def load_diff() -> str:
 
 # ─── Groq API 呼び出し ────────────────────────────────────────────────────────
 
-def generate_review(diff: str, pr_title: str, base: str, head: str) -> tuple[str, int, int]:
+def extract_json_from_response(text: str) -> dict:
+    """
+    AIレスポンスから JSON を取り出す。
+    モデルがコードブロック（```json ... ```）で包んだ場合も対応。
+    """
+    # コードブロックを除去
+    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
+    text = re.sub(r"\s*```$", "", text.strip(), flags=re.MULTILINE)
+    return json.loads(text.strip())
+
+
+def generate_review(
+    diff: str,
+    pr_title: str,
+    base: str,
+    head: str,
+    changed_files: dict[str, list[int]],
+) -> tuple[str, list[dict], int, int]:
     """
     Groq（Llama 3.3 70B）を呼び出してレビューを生成する。
-    戻り値: (レビュー本文, input_tokens, output_tokens)
+    戻り値: (サマリー, インラインコメントリスト, input_tokens, output_tokens)
     """
     client = Groq(api_key=sanitize_api_key(os.environ["GROQ_API_KEY"]))
 
@@ -182,49 +245,111 @@ def generate_review(diff: str, pr_title: str, base: str, head: str) -> tuple[str
     print(f"[info] {MODEL}（Groq）にリクエスト中...")
     chat_completion = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": build_system_prompt(changed_files)},
             {"role": "user", "content": user_message},
         ],
         model=MODEL,
         max_tokens=2048,
     )
 
-    review        = chat_completion.choices[0].message.content
+    raw_text     = chat_completion.choices[0].message.content
     input_tokens  = chat_completion.usage.prompt_tokens
     output_tokens = chat_completion.usage.completion_tokens
     cost          = calc_cost(input_tokens, output_tokens)
 
     print(f"[info] 完了 — input: {input_tokens} tok / output: {output_tokens} tok / 参考コスト: ${cost:.4f}")
-    return review, input_tokens, output_tokens
+
+    # JSON をパース（失敗時はサマリーのみ返す）
+    try:
+        result   = extract_json_from_response(raw_text)
+        summary  = result.get("summary", raw_text)
+        comments = result.get("comments", [])
+        print(f"[info] インラインコメント候補: {len(comments)} 件")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[warn] JSON パース失敗（{e}）。サマリーのみ投稿します。")
+        summary  = raw_text
+        comments = []
+
+    return summary, comments, input_tokens, output_tokens
 
 
-# ─── GitHub コメント投稿 ──────────────────────────────────────────────────────
+# ─── GitHub API 投稿 ──────────────────────────────────────────────────────────
 
-def post_github_comment(repo: str, pr_number: str, body: str) -> None:
-    token   = os.environ["GITHUB_TOKEN"]
-    url     = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
-    data    = json.dumps({"body": body}).encode("utf-8")
+def _github_request(url: str, body: dict, token: str) -> dict:
+    data    = json.dumps(body).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            print(f"[info] コメント投稿完了: {result['html_url']}")
+            return json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        print(f"[error] GitHub API エラー: {e.code} {e.read().decode()}", file=sys.stderr)
-        sys.exit(1)
+        body_text = e.read().decode()
+        print(f"[error] GitHub API エラー: {e.code} {body_text}", file=sys.stderr)
+        raise
+
+
+def post_pr_review(
+    repo: str,
+    pr_number: str,
+    summary: str,
+    inline_comments: list[dict],
+    changed_files: dict[str, list[int]],
+    token: str,
+) -> None:
+    """
+    PR Review API でサマリー + インラインコメントを投稿する。
+    存在しないファイル・行番号はスキップして失敗を防ぐ。
+    """
+    # 変更行セットを作成してバリデーション
+    valid_comments = []
+    skipped = 0
+    for c in inline_comments:
+        path = c.get("path", "")
+        line = c.get("line")
+        body = c.get("body", "")
+
+        if not path or not isinstance(line, int) or not body:
+            skipped += 1
+            continue
+
+        allowed_lines = changed_files.get(path, [])
+        if line not in allowed_lines:
+            print(f"[warn] スキップ: {path}:{line} は変更行に含まれていません")
+            skipped += 1
+            continue
+
+        valid_comments.append({"path": path, "line": line, "side": "RIGHT", "body": body})
+
+    if skipped:
+        print(f"[info] {skipped} 件のコメントをスキップしました（無効な path/line）")
+    print(f"[info] インラインコメント投稿: {len(valid_comments)} 件")
+
+    url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/reviews"
+    payload = {
+        "body": summary,
+        "event": "COMMENT",
+        "comments": valid_comments,
+    }
+
+    try:
+        result = _github_request(url, payload, token)
+        print(f"[info] レビュー投稿完了: {result.get('html_url', '（URL取得失敗）')}")
+    except urllib.error.HTTPError:
+        # インラインコメント付きで失敗した場合はサマリーのみ再投稿
+        print("[warn] インラインコメント付き投稿が失敗しました。サマリーのみ再投稿します。")
+        fallback_url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
+        result = _github_request(fallback_url, {"body": summary}, token)
+        print(f"[info] サマリーのみ投稿完了: {result.get('html_url', '')}")
 
 
 # ─── ユーティリティ ───────────────────────────────────────────────────────────
 
 def sanitize_api_key(raw: str) -> str:
-    """API キーから制御文字・BOM・改行などを除去する。"""
     cleaned = re.sub(r"[^\x21-\x7E]", "", raw)
     if not cleaned:
         print("[error] GROQ_API_KEY が空か、印字可能文字を含みません", file=sys.stderr)
@@ -248,36 +373,43 @@ def main() -> None:
     head      = os.environ.get("HEAD_BRANCH", "feature")
     pr_number = os.environ["PR_NUMBER"]
     repo      = os.environ["REPO"]
+    token     = os.environ["GITHUB_TOKEN"]
 
-    # 1. 月次コスト確認（無料枠内は実質 $0 だが安全網として残す）
+    # 1. 月次コスト確認
     usage = load_monthly_usage()
     can_run, budget_msg = check_budget(usage)
-
     if not can_run:
-        print(f"[warn] 予算超過のためスキップします: {budget_msg}")
-        post_github_comment(repo, pr_number, budget_msg)
+        print(f"[warn] 予算超過のためスキップします")
+        fallback_url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
+        _github_request(fallback_url, {"body": budget_msg}, token)
         sys.exit(0)
 
     # 2. diff を読み込む
     diff = load_diff()
     print(f"[info] diff: {len(diff)} 文字")
 
-    # 3. Groq でレビュー生成
-    review, input_tokens, output_tokens = generate_review(diff, pr_title, base, head)
+    # 3. diff をパースして変更ファイル・行番号を取得
+    changed_files = parse_diff(diff)
+    print(f"[info] 変更ファイル: {len(changed_files)} 件")
 
-    # 4. 月次使用量を更新・保存
+    # 4. Groq でレビュー生成
+    summary, inline_comments, input_tokens, output_tokens = generate_review(
+        diff, pr_title, base, head, changed_files
+    )
+
+    # 5. 月次使用量を更新・保存
     cost = calc_cost(input_tokens, output_tokens)
     usage["input_tokens"]  += input_tokens
     usage["output_tokens"] += output_tokens
     usage["cost_usd"]      += cost
     save_monthly_usage(usage)
 
-    # 5. 予算警告をレビューに付加（有料転換時の安全網）
+    # 6. 予算警告を summary に付加
     _, warn_msg = check_budget(usage)
-    full_review = review + warn_msg
+    summary += warn_msg
 
-    # 6. GitHub PR にコメント投稿
-    post_github_comment(repo, pr_number, full_review)
+    # 7. PR にインラインコメント + サマリーを投稿
+    post_pr_review(repo, pr_number, summary, inline_comments, changed_files, token)
 
 
 if __name__ == "__main__":
