@@ -1,4 +1,4 @@
-name: AI Code Review (Claude)
+name: AI Code Review (Gemini)
 
 on:
   pull_request:
@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install anthropic
+        run: pip install google-genai
 
       - name: Get current year-month
         run: echo "YEAR_MONTH=$(date +'%Y-%m')" >> $GITHUB_ENV
@@ -49,7 +49,7 @@ jobs:
 
       - name: Run AI Review
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
