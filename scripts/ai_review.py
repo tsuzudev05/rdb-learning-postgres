@@ -32,7 +32,8 @@ from groq import Groq
 
 DIFF_FILE      = "diff.txt"
 USAGE_FILE     = ".monthly-usage.json"
-MAX_DIFF_CHARS = 80_000   # llama-3.3-70b-versatile の context 128K tokens を考慮
+MAX_DIFF_CHARS = 25_000   # Groq 無料枠 12,000 TPM 制限に合わせた上限
+                          # 80,000文字 → ~27,000トークンで超過するため縮小
 MODEL          = "llama-3.3-70b-versatile"
 
 # Groq 無料枠は $0。有料プランの参考単価（2025年時点）
