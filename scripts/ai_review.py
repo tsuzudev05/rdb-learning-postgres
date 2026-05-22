@@ -21,6 +21,7 @@ Usage (GitHub Actions から呼ばれる):
 """
 
 import os
+import re
 import sys
 import json
 import urllib.request
@@ -175,7 +176,7 @@ def generate_review(diff: str, pr_title: str, base: str, head: str) -> tuple[str
     Claude Haiku を呼び出してレビューを生成する。
     戻り値: (レビュー本文, input_tokens, output_tokens)
     """
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"].strip())
+    client = anthropic.Anthropic(api_key=sanitize_api_key(os.environ["ANTHROPIC_API_KEY"]))
 
     user_message = f"""以下の Pull Request をレビューしてください。
 
@@ -229,6 +230,22 @@ def post_github_comment(repo: str, pr_number: str, body: str) -> None:
 
 
 # ─── メイン ──────────────────────────────────────────────────────────────────
+
+def sanitize_api_key(raw: str) -> str:
+    """
+    API キーから印字不可能な文字（改行・BOM・制御文字など）を除去する。
+    strip() だけでは端以外に混入した制御文字を取り除けないため正規表現で処理する。
+    """
+    cleaned = re.sub(r"[^\x21-\x7E]", "", raw)  # 印字可能 ASCII (0x21–0x7E) のみ残す
+    if not cleaned:
+        print("[error] ANTHROPIC_API_KEY が空か、印字可能文字を含みません", file=sys.stderr)
+        sys.exit(1)
+    if not cleaned.startswith("sk-ant-"):
+        # キーの先頭数文字だけ表示してデバッグを助ける（全体は出力しない）
+        print(f"[warn] ANTHROPIC_API_KEY が想定外の形式です（先頭8文字: {cleaned[:8]!r}）", file=sys.stderr)
+    print(f"[info] API キーを sanitize しました（元: {len(raw)} 文字 → 後: {len(cleaned)} 文字）")
+    return cleaned
+
 
 def main() -> None:
     # 環境変数の確認
