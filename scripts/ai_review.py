@@ -144,45 +144,50 @@ def build_system_prompt(changed_files: dict[str, list[int]]) -> str:
     """変更ファイルと行番号の情報を含むシステムプロンプトを生成する。"""
     file_info_lines = []
     for path, lines in changed_files.items():
-        # 行番号が多すぎる場合は省略して見やすくする
         if len(lines) > 20:
-            shown = lines[:20]
-            file_info_lines.append(f"  {path}: 行 {shown}... (他 {len(lines)-20} 行)")
+            file_info_lines.append(f"  {path}: 行 {lines[:20]}... (他 {len(lines)-20} 行)")
         else:
             file_info_lines.append(f"  {path}: 行 {lines}")
     file_info = "\n".join(file_info_lines) if file_info_lines else "  （変更ファイルなし）"
 
-    return f"""あなたは DDD（ドメイン駆動設計）・C++17・Go・PostgreSQL に詳しいシニアエンジニアです。
-Pull Request の diff をレビューし、**必ず以下の JSON 形式のみ**で回答してください。
-JSON 以外のテキスト（説明文・前置き・コードブロック記号）は一切含めないこと。
+    return f"""あなたは DDD・C++17・Go・PostgreSQL に詳しいシニアエンジニアです。
+PR の diff をレビューし、以下の JSON スキーマに従って **JSON のみ** を出力してください。
+前置き・説明文・コードブロック記号（```）は一切含めないこと。
 
-{{
-  "summary": "## 🤖 AI コードレビュー（Llama 3.3 70B / Groq）\\n\\n### 概要\\n（2〜3行）\\n\\n### ✅ 良い点\\n- ...\\n\\n### 🔴 要修正\\n（なければ「なし」）\\n\\n### 🟡 改善提案\\n- ...\\n\\n### 📊 総評\\nLGTM / 要修正 / 要確認\\n\\n---\\n*このレビューは Llama 3.3 70B（Groq）によって自動生成されました。*",
-  "comments": [
-    {{
-      "path": "ファイルパス",
-      "line": 行番号（整数）,
-      "body": "指摘内容"
-    }}
-  ]
-}}
+JSONスキーマ:
+- "summary": 文字列（改行は \\n で表現）。レビュー全体をMarkdownで記述。
+- "comments": 配列。各要素は {{"path": 文字列, "line": 整数, "body": 文字列}}。
 
-## インラインコメントのルール
-- `comments` には具体的なコードの問題点のみ記載する（アーキテクチャ全体への指摘は `summary` に書く）
-- `path` と `line` は**以下の変更ファイル一覧に含まれるもののみ**使用すること
-- 一覧にない path・line を指定するとコメント投稿が失敗するため厳守する
-- 特定行への指摘がない場合は `comments` を空配列 `[]` にする
+summaryの内容テンプレート（このまま使ってよい）:
+## 🤖 AI コードレビュー（Llama 3.3 70B / Groq）
 
-## 変更ファイルと変更行番号の一覧
+### 概要
+（2〜3行で要約）
+
+### ✅ 良い点
+- （箇条書き）
+
+### 🔴 要修正
+（なければ「なし」）
+
+### 🟡 改善提案
+- （任意）
+
+### 📊 総評
+LGTM / 要修正 / 要確認
+
+---
+*このレビューは Llama 3.3 70B（Groq）によって自動生成されました。*
+
+commentsのルール:
+- 具体的なコードの問題を指摘する場合のみ記載（全体的な指摘はsummaryに書く）
+- pathとlineは必ず下記「変更ファイル一覧」に含まれる値のみ使用すること
+- 指摘がない場合は空配列 [] にすること
+
+変更ファイル一覧:
 {file_info}
 
-## レビュー観点
-- コードの正確性・バグの可能性
-- DDD / クリーンアーキテクチャの原則への準拠
-- C++17 / Go のイディオムへの準拠
-- セキュリティリスク（SQLインジェクション・認証情報の露出など）
-- パフォーマンス上の懸念
-- テストの考慮事項"""
+レビュー観点: コードの正確性・バグ・DDD原則への準拠・C++17/Goイディオム・セキュリティ・パフォーマンス・テスト"""
 
 
 # ─── diff 読み込み ────────────────────────────────────────────────────────────
@@ -210,13 +215,45 @@ def load_diff() -> str:
 
 def extract_json_from_response(text: str) -> dict:
     """
-    AIレスポンスから JSON を取り出す。
-    モデルがコードブロック（```json ... ```）で包んだ場合も対応。
+    AIレスポンスから JSON を取り出して正規化する。
+    - コードブロック（```json ... ```）を除去
+    - summary が配列になっていた場合は結合して文字列に修正
+    - summary が JSON の複数キーに分散していた場合も復元を試みる
     """
     # コードブロックを除去
-    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
-    text = re.sub(r"\s*```$", "", text.strip(), flags=re.MULTILINE)
-    return json.loads(text.strip())
+    cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
+    cleaned = re.sub(r"\s*```$", "", cleaned.strip(), flags=re.MULTILINE)
+
+    data = json.loads(cleaned.strip())
+
+    # summary の正規化
+    summary = data.get("summary", "")
+    if isinstance(summary, list):
+        # ["## header", "\n\n### section", ...] → 結合
+        summary = "".join(str(s) for s in summary)
+        data["summary"] = summary
+    elif not isinstance(summary, str):
+        data["summary"] = str(summary)
+
+    # Llama がセクションを別キーに分散させた場合の復元
+    # 例: {summary: "## title", "\n\n### 概要\n": "内容", ...}
+    if summary and not any(h in summary for h in ["### 概要", "### 良い点", "### ✅"]):
+        extra_parts = []
+        for key, val in data.items():
+            if key in ("summary", "comments"):
+                continue
+            if isinstance(val, list):
+                val = "\n".join(f"- {v}" for v in val if isinstance(v, str))
+            if key.strip() or val:
+                extra_parts.append(f"{key}{val}")
+        if extra_parts:
+            data["summary"] = summary + "".join(extra_parts)
+
+    # comments の正規化（配列でない場合は空に）
+    if not isinstance(data.get("comments"), list):
+        data["comments"] = []
+
+    return data
 
 
 def generate_review(
