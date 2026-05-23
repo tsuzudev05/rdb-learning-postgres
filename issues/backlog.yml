@@ -1,0 +1,91 @@
+# GitHub Issue バックログ定義ファイル
+#
+# このファイルを push すると GitHub Actions が未登録の Issue を自動作成する。
+# - title が既存 Issue と完全一致する場合はスキップ（重複防止）
+# - 登録済みの Issue はここから削除しても Issue 側は消えない（安全）
+#
+# 使い方:
+#   1. issues: リストに追加する
+#   2. git add issues/backlog.yml && git commit && git push
+#   3. Actions が自動で Issue を作成する
+#
+# 手動で即時登録したい場合（DevContainer 内）:
+#   gh auth login
+#   gh issue create --title "タイトル" --body "本文" --label "enhancement"
+
+issues:
+  - title: "フェーズ4補完: PgTeamRepository / PgPeriodRepository 実装"
+    labels: ["enhancement", "C++"]
+    body: |
+      ## 概要
+      フェーズ4（libpqxx 実装）で Team / Period の Repository が未実装のため追加する。
+
+      ## 成果物
+      - `src/infrastructure/repository/PgTeamRepository.hpp`
+        - findById / findByUserId / findAll / save（upsert）/ remove
+        - TeamMember の一括管理（Team 集約）
+      - `src/infrastructure/repository/PgPeriodRepository.hpp`
+        - findById / findByTeamId / findAll / save（upsert）/ remove
+      - `src/main.cpp` のスモークテストに Team / Period の検証を追加
+
+      ## 関連
+      - ITeamRepository: `src/domain/repository/ITeamRepository.hpp`
+      - IPeriodRepository: `src/domain/repository/IPeriodRepository.hpp`
+      - スキーマ: `05_DDD統合/schema.sql`
+
+  - title: "フェーズ6補完: 残りのユースケース層（C++）実装"
+    labels: ["enhancement", "C++"]
+    body: |
+      ## 概要
+      フェーズ6で UserUseCase のみ実装済み。Team / Period / Objective / KeyResult のユースケースを追加する。
+
+      ## 成果物
+      - `src/application/usecase/TeamUseCase.hpp`
+        - CreateTeam / GetTeam / AddMember / RemoveMember / ListTeams / DeleteTeam
+      - `src/application/usecase/PeriodUseCase.hpp`
+        - CreatePeriod / GetPeriod / ListPeriods
+      - `src/application/usecase/ObjectiveUseCase.hpp`
+        - CreateObjective / GetObjective / ListObjectives / DeleteObjective
+      - `src/application/usecase/KeyResultUseCase.hpp`
+        - CreateKeyResult / UpdateProgress / GetKeyResult / ListKeyResults / DeleteKeyResult
+
+      ## 方針
+      - UserUseCase と同様に IRepository への依存注入パターンで設計
+      - ドメインサービス（owner が team メンバーか検証など）が必要な場合は `src/domain/service/` に追加
+
+  - title: "フェーズ7: CLI プレゼンテーション層（C++）実装"
+    labels: ["enhancement", "C++"]
+    body: |
+      ## 概要
+      `src/presentation/cli/` にインタラクティブ CLI を実装する。
+
+      ## 成果物
+      - `src/presentation/cli/CliApp.hpp` — メインループ・コマンドディスパッチ
+      - `src/main.cpp` をスモークテストから CLI エントリーポイントに切り替え（または分離）
+      - 対応コマンド例:
+        - `user create <name> <email>`
+        - `user list`
+        - `objective create <period_id> <owner_id> <title>`
+
+      ## 依存
+      - フェーズ6（ユースケース層）完了後に着手
+
+  - title: "Go 拡張: Team / Period / Objective / KeyResult の DDD 実装"
+    labels: ["enhancement", "Go"]
+    body: |
+      ## 概要
+      Go 側は現在 User のみ実装済み。C++ 版と対称になるよう残る集約を追加する。
+
+      ## 成果物
+      `05_DDD統合/go/` 以下に追加:
+      - `domain/model/team/` — Team エンティティ・TeamMember・Role 値オブジェクト
+      - `domain/model/period/` — Period エンティティ・Half 値オブジェクト
+      - `domain/model/objective/` — Objective エンティティ
+      - `domain/model/keyresult/` — KeyResult エンティティ・KrProgressLog・進捗型
+      - `domain/repository/` — 各 Repository インターフェース
+      - `infrastructure/repository/` — pgx 実装（各集約）
+      - `cmd/smoke/main.go` に各 Repository のスモークテストを追加
+
+      ## 方針
+      - C++ 版との設計対応を `05_DDD統合/go/README.md` に記載する
+      - `Result<T>` → `(T, error)` の対応は User 実装を踏襲

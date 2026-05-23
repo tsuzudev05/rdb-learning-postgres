@@ -1,0 +1,57 @@
+name: Create Issues from Backlog
+
+on:
+  push:
+    paths:
+      - "issues/backlog.yml"
+    branches:
+      - main
+
+jobs:
+  create-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Create issues from backlog.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(yq '.issues | length' issues/backlog.yml)
+          echo "📋 登録対象: ${COUNT} 件"
+
+          for i in $(seq 0 $((COUNT - 1))); do
+            TITLE=$(yq ".issues[$i].title" issues/backlog.yml)
+            BODY=$(yq ".issues[$i].body" issues/backlog.yml)
+            LABELS=$(yq ".issues[$i].labels | join(\",\")" issues/backlog.yml)
+
+            # 同じタイトルの Issue が既に存在するかチェック（重複防止）
+            EXISTING=$(gh issue list \
+              --repo "$REPO" \
+              --state all \
+              --search "\"${TITLE}\" in:title" \
+              --json title \
+              --jq "[.[].title | select(. == \"${TITLE}\")] | length")
+
+            if [ "$EXISTING" -gt 0 ]; then
+              echo "⏭️  スキップ（既存）: ${TITLE}"
+            else
+              gh issue create \
+                --repo "$REPO" \
+                --title "${TITLE}" \
+                --body "${BODY}" \
+                --label "${LABELS}" \
+              && echo "✅ 作成: ${TITLE}" \
+              || echo "⚠️  作成失敗: ${TITLE}"
+            fi
+          done
