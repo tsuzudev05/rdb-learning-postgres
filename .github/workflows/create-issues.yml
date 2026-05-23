@@ -6,6 +6,7 @@ on:
       - "issues/backlog.yml"
     branches:
       - main
+  workflow_dispatch:  # GitHub UI から手動実行できるようにする
 
 jobs:
   create-issues:
