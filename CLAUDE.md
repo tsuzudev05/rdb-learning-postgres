@@ -192,3 +192,21 @@ test:  テストのみ
 
 - GitHub: https://github.com/tsuzudev05/rdb-learning-postgres
 - Zenn: https://zenn.dev/tsuzudev05
+### フェーズ6：ユースケース層（C++）🚧
+
+配置先: `05_DDD統合/src/application/usecase/`
+
+| ファイル                                       | 内容                                  |
+| ---------------------------------------------- | ------------------------------------- |
+| `application/usecase/UserUseCase.hpp`          | CreateUser / GetUser / ListUsers / DeleteUser（DI パターン、Result<T> で統一）|
+
+**設計ポイント:**
+- `IUserRepository` を `shared_ptr` で DI → インフラ層への依存ゼロ
+- 入力 DTO（`CreateUserInput` / `GetUserInput` / `DeleteUserInput`）と出力 DTO（`UserOutput`）を分離
+- `CreateUser` にメールアドレス重複チェックを組み込み
+- `DeleteUser` は冪等（存在しない場合もエラーにしない）
+- `UserId::generate()` を追加（UUID v4 を C++ random で生成）
+
+**要手動確認（DevContainer 内）:**
+- `g++ -std=c++17 -Wall src/application/usecase/UserUseCase.hpp -o /dev/null` でコンパイル確認
+- スモークテストとの結合確認
