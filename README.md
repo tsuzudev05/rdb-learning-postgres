@@ -1,115 +1,139 @@
 # rdb-learning-postgres
 
-PostgreSQL を用いた RDB 設計・SQL・パフォーマンスチューニングの学習リポジトリ。  
-C++ / Rust / Go × DDD のポートフォリオ開発に向けた、データベース基礎から応用までを体系的にまとめる。
+C++ × Go × PostgreSQL × DDD のポートフォリオ開発リポジトリ。  
+OKR 管理ツールを題材に、クリーンアーキテクチャ・DDD・RDB 設計を実践する。
 
 ---
 
-## 🎯 学習目的
+## 🗺️ どこを見ればいい？
 
-- C++ × TypeScript ポートフォリオ（OKR 管理ツール）への PostgreSQL 統合
-- Go × DDD ポートフォリオ（物流管理アプリ）への PostgreSQL 統合
+| 知りたいこと | 参照先 |
+|---|---|
+| プロジェクト概要・実装状況 | [`CLAUDE.md`](./CLAUDE.md) |
+| 毎日の作業手順・コミット規則 | [`DAILY_WORKFLOW.md`](./DAILY_WORKFLOW.md) |
+| テストの実行方法 | [`docs/testing.md`](./docs/testing.md) |
+| DB スキーマ設計の解説 | [`05_DDD統合/schema.md`](./05_DDD統合/schema.md) |
+| ドメインモデル・集約設計 | [`05_DDD統合/docs/domain-model.md`](./05_DDD統合/docs/domain-model.md) |
+| Go 実装の概要 | [`05_DDD統合/go/README.md`](./05_DDD統合/go/README.md) |
+| AI レビューの設定方法 | [`docs/ai-review-setup.md`](./docs/ai-review-setup.md) |
+| 実装バックログ（Issues） | [GitHub Issues](https://github.com/tsuzudev05/rdb-learning-postgres/issues) |
 
 ---
 
-## 🗂️ [WIP] ディレクトリ構成
+## 📦 技術スタック
+
+| レイヤー | 技術 |
+|---|---|
+| ドメイン・インフラ（C++） | C++17 / libpqxx / PostgreSQL 16 |
+| インフラ（Go） | Go 1.22 / pgx v5 / PostgreSQL 16 |
+| DB | PostgreSQL 16 / uuid-ossp |
+| 開発環境 | VSCode DevContainer / Docker |
+| CI | GitHub Actions（AI レビュー：Groq） |
+
+---
+
+## 🏗️ アーキテクチャ
+
+DDD / クリーンアーキテクチャで実装。
+
+```
+src/
+├── common/           # 共通型（Result<T> など）
+├── domain/           # ドメイン層（外部依存ゼロ）
+│   ├── model/        # 値オブジェクト・エンティティ
+│   ├── service/      # ドメインサービス
+│   └── repository/   # Repository インターフェース（純粋仮想）
+├── application/      # ユースケース層
+│   └── usecase/
+├── infrastructure/   # インフラ層（libpqxx / pgx 実装）
+│   └── repository/
+└── presentation/     # プレゼンテーション層
+    └── cli/
+```
+
+---
+
+## 📈 実装フェーズ
+
+| フェーズ | 内容 | 状態 |
+|---|---|---|
+| 1 | 値オブジェクト（UserId / Email / Role / DateRange など） | ✅ 完了 |
+| 2 | エンティティ（User / Team / Period / Objective / KeyResult） | ✅ 完了 |
+| 3 | Repository インターフェース（I*Repository） | ✅ 完了 |
+| 4 | libpqxx 実装（PgUserRepository など） | ✅ 完了 |
+| 5 | Go (pgx) 実装（UserRepository） | ✅ 完了 |
+| 6 | ユースケース層（C++）実装 | 🔄 進行中 |
+
+---
+
+## 🚀 環境構築
+
+### 前提
+
+- Docker Desktop（26 以上）
+- VSCode + [Dev Containers 拡張](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+### 起動
+
+```
+コマンドパレット（Ctrl+Shift+P）
+→「Dev Containers: Rebuild and Reopen in Container」
+```
+
+`postCreateCommand` により以下が自動実行される：
+- Git 設定
+- PostgreSQL 接続待機
+- DDD スキーマ投入（`05_DDD統合/schema.sql`）
+- ビルドディレクトリ準備
+
+### テスト実行（起動後）
+
+```bash
+bash scripts/test-all.sh    # C++ + Go をまとめて確認
+bash scripts/test.sh        # C++ スモークテストのみ
+bash scripts/go-test.sh     # Go ビルド・テストのみ
+```
+
+詳細は [`docs/testing.md`](./docs/testing.md) を参照。
+
+---
+
+## 🗂️ ディレクトリ構成
 
 ```
 rdb-learning-postgres/
 ├── .devcontainer/
-│   ├── .env.example             # 環境変数サンプル
-│   ├── devcontainer-lock.json   # DevContainer ロックファイル
-│   ├── devcontainer.json        # VSCode DevContainer 設定
-│   ├── docker-compose.yml       # appコンテナ + PostgreSQL 16
-│   ├── Dockerfile               # Go / Rust 入り開発環境
-│   ├── setup.sh                 # 初回セットアップスクリプト
+│   ├── Dockerfile               # Go 1.22 / build-essential / libpqxx-dev
+│   ├── docker-compose.yml       # app コンテナ + PostgreSQL 16
+│   ├── setup.sh                 # postCreateCommand（スキーマ投入・Git 設定）
 │   └── init/
-│       └── 01_init_schema.sql   # コンテナ初回起動時に自動実行されるスキーマ
-├── 02_パフォーマンス/
-│   ├── benchmark_index.sh       # インデックス有無でのベンチマークスクリプト
-│   └── ベンチマーク結果.md       # インデックス有無での実行時間比較
-├── 03_トランザクション/
-│   ├── benchmark_deadlock.sh    # デッドロック再現・回避策のベンチマークスクリプト
-│   ├── benchmark_isolation.sh   # 分離レベル挙動確認スクリプト
-│   ├── benchmark_transaction.sh # BEGIN/ROLLBACK/COMMIT 動作確認スクリプト
-│   ├── ACID特性.md              # ACID の解説と実際の動作確認
-│   ├── デッドロック動作確認結果.md  # デッドロックの再現と回避策の動作確認結果
-│   └── 分離レベル動作確認結果.md   # READ COMMITTED / REPEATABLE READ の挙動確認結果
-├── 04_DDD統合/                  # [WIP] DDD × PostgreSQL の実装例
-└── 05_実践課題/                 # [WIP] OKR管理・物流管理スキーマ設計
+│       └── 01_init_schema.sql   # uuid-ossp 拡張のみ（テーブルは setup.sh で投入）
+├── 02_パフォーマンス/            # インデックス・ベンチマーク学習ノート
+├── 03_トランザクション/          # ACID・分離レベル・デッドロック学習ノート
+├── 05_DDD統合/
+│   ├── schema.sql               # DB スキーマ（正）
+│   ├── schema.md                # スキーマ設計解説
+│   ├── docs/domain-model.md     # ドメインモデル・集約設計
+│   ├── src/                     # C++ 実装（domain / infrastructure）
+│   ├── go/                      # Go 実装（domain / infrastructure）
+│   └── build/                   # C++ ビルド成果物（.gitignore）
+├── docs/
+│   ├── testing.md               # テスト手順書
+│   ├── ai-review-setup.md       # GitHub Actions AI レビュー設定手順
+│   └── github-issues-backlog.md # Issues 管理ルール
+├── scripts/
+│   ├── build.sh                 # C++ ビルドのみ
+│   ├── test.sh                  # C++ スモークテスト
+│   ├── go-test.sh               # Go ビルド・テスト
+│   └── test-all.sh              # C++ + Go 一括テスト
+├── CLAUDE.md                    # プロジェクト概要・実装状況（Claude Code 用）
+├── DAILY_WORKFLOW.md            # 毎日の作業手順書
+└── README.md                    # 本ファイル
 ```
 
 ---
 
-## 📅 [WIP] 学習ロードマップ
+## 🔗 関連リンク
 
-| フェーズ         | 期間     | 内容                                |
-| ---------------- | -------- | ----------------------------------- |
-| テーブル設計     | 1週目    | 正規化・ER図・スキーマ設計          |
-| パフォーマンス   | 2〜3週目 | インデックス・EXPLAIN・クエリ最適化 |
-| トランザクション | 3〜4週目 | ACID・分離レベル・デッドロック      |
-| DDD統合          | 4〜6週目 | Repository パターン・C++/Go 実装    |
-| 実践課題         | 7週目〜  | OKR管理・物流管理スキーマ設計       |
-
----
-
-## 🛠️ 環境構築（DevContainer）
-
-VSCode の DevContainer を使うことで、PostgreSQL・Go・Rust が揃った開発環境を1コマンドで起動できる。
-
-### 前提
-
-- Docker 26 以上
-- VSCode + [Dev Containers 拡張機能](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-
-### 起動手順
-
-```bash
-# 1. VSCode でリポジトリを開き DevContainer を起動
-# コマンドパレット（Cmd+Shift+P）
-# →「Dev Containers: Reopen in Container」を選択
-
-# 2. コンテナ起動後、PostgreSQL への接続確認
-docker exec -it pg-dev psql -U postgres -d learning
-```
-
-### 含まれる環境
-
-| ツール     | バージョン | 用途                         |
-| ---------- | ---------- | ---------------------------- |
-| PostgreSQL | 16         | RDB 学習・ポートフォリオ統合 |
-| Go         | 1.22       | ZOZO向けポートフォリオ開発   |
-| Rust       | 最新安定版 | Rust CLI ツール開発          |
-| psql       | 16         | PostgreSQL クライアント      |
-
----
-
-## 📝 学習メモの書き方ルール
-
-各ディレクトリの `.md` ファイルには以下の形式で記録する。
-
-```markdown
-## やったこと
-## 詰まったこと・解決方法
-## 次回やること
-```
-
----
-
-## 🔗 関連リポジトリ（作成予定）
-
-- `okr-manager-cpp` — C++ × TypeScript × PostgreSQL の OKR 管理ツール
-- `logistics-ddd-go` — Go × DDD × PostgreSQL の物流管理アプリ
-- `rust-cli-tools` — Rust 製 CLI ツール（SQLite 連携）
-
----
-
-## 📚 参考資料
-
-| 種別 | タイトル                                                       |
-| ---- | -------------------------------------------------------------- |
-| 動画 | SQL超入門コース 合併版（YouTube）                              |
-| 演習 | SQLZOO（https://sqlzoo.net）                                   |
-| 公式 | PostgreSQL 16 ドキュメント（https://www.postgresql.org/docs/） |
-
----
+- GitHub: https://github.com/tsuzudev05/rdb-learning-postgres
+- Zenn: https://zenn.dev/tsuzudev05

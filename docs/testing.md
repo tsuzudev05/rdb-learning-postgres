@@ -2,8 +2,8 @@
 
 ## 概要
 
-このプロジェクトでは DevContainer 内で C++ スモークテストを実行する。  
-テスト対象は `05_DDD統合/src/infrastructure/repository/` の libpqxx 実装（フェーズ4）。
+DevContainer 内で C++（libpqxx）と Go（pgx）のスモークテストを実行する。  
+テスト対象は `05_DDD統合/src/infrastructure/repository/` および `05_DDD統合/go/` の Repository 実装。
 
 ---
 
@@ -16,72 +16,56 @@
 
 ## 初回セットアップ
 
-### 1. DevContainer を起動する
-
-VSCode でプロジェクトを開き、コマンドパレット（`Ctrl+Shift+P`）から実行：
+### DevContainer を起動する
 
 ```
-Dev Containers: Rebuild and Reopen in Container
+コマンドパレット（Ctrl+Shift+P）
+→「Dev Containers: Rebuild and Reopen in Container」
 ```
 
 > 初回はイメージのビルドに数分かかります。
 
-### 2. セットアップスクリプトの確認
+`postCreateCommand` により以下が自動実行される：
 
-`postCreateCommand` により自動実行されるが、手動で再実行する場合：
+- Git 設定（`GIT_USER_NAME` / `GIT_USER_EMAIL`）
+- PostgreSQL 接続待機
+- DDD スキーマ投入（`05_DDD統合/schema.sql`）
+- ビルドディレクトリ準備・スクリプトへの実行権限付与
+
+手動で再実行する場合：
 
 ```bash
 bash /workspace/.devcontainer/setup.sh
-```
-
-セットアップが完了すると以下が確認できる：
-
-```
-✅ Git設定完了
-✅ PostgreSQL に接続できました
-✅ DDD スキーマ投入完了
-✅ C++ ビルドディレクトリ準備完了
-
-📌 インストール済みツール：
-  g++     : g++ (Ubuntu ...) 13.x.x
-  make    : GNU Make 4.x
-  libpqxx : 7.x.x (または 6.4.5)
-  ...
 ```
 
 ---
 
 ## テストの実行
 
-### 方法 A — テストスクリプト（推奨）
+### 推奨：C++ + Go まとめて実行
+
+```bash
+bash /workspace/scripts/test-all.sh
+```
+
+### C++ スモークテストのみ
 
 ```bash
 bash /workspace/scripts/test.sh
 ```
 
-### 方法 B — Makefile を直接使う
+### Go ビルド・テストのみ
 
 ```bash
-cd /workspace/05_DDD統合
-make test
-```
-
-### 方法 C — ステップごとに実行
-
-```bash
-cd /workspace/05_DDD統合
-
-# ビルドのみ
-make build
-
-# ビルド済みバイナリを直接実行
-DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning \
-  ./build/okr_smoke_test
+bash /workspace/scripts/go-test.sh            # ビルド + go test
+bash /workspace/scripts/go-test.sh smoke      # + スモークテスト（DB 接続必要）
 ```
 
 ---
 
 ## テスト内容
+
+### C++ スモークテスト（`05_DDD統合/src/main.cpp`）
 
 | # | テスト名 | 内容 |
 |---|---|---|
@@ -95,35 +79,35 @@ DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning \
 | 8 | ObjectiveRepository 生成 | インスタンス生成のみ確認 |
 | 9 | KeyResultRepository 生成 | インスタンス生成のみ確認 |
 
+### Go テスト（`05_DDD統合/go/`）
+
+`go test ./...` で全パッケージを確認。スモークテスト（`cmd/smoke`）は DB 接続が必要。
+
 ---
 
 ## 成功時の出力
 
 ```
 ========================================
- C++ スモークテスト
+ 全体テスト (C++ + Go)
 ========================================
 [事前確認] PostgreSQL 接続確認...
 ✅ DB 接続 OK
 
+--- C++ ---
 [1/2] C++ ビルド中...
-✅ ビルド成功: ./build/okr_smoke_test
-
+✅ ビルド成功: /workspace/05_DDD統合/build/okr_smoke_test
 [2/2] スモークテスト実行中...
+✅ 全テスト PASSED
+
+--- Go ---
+[1/2] go build...
+✅ ビルド成功
+[2/2] go test...
+✅ テスト完了
+
 ========================================
- OKR Repository スモークテスト
-========================================
-[1] DB 接続確認... ✅  DB=learning
-[2] save (新規)... ✅
-[3] findById... ✅  name=スモークテスト太郎
-[4] save (更新)... ✅  name=スモークテスト更新済み
-[5] findByEmail... ✅
-[6] findAll... ✅  count=1
-[7] remove... ✅
-[8] PgObjectiveRepository 生成... ✅
-[9] PgKeyResultRepository 生成... ✅
-========================================
- ✅ 全テスト PASSED
+ 全体テスト 完了
 ========================================
 ```
 
@@ -131,54 +115,58 @@ DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning \
 
 ## トラブルシューティング
 
+### `relation "users" does not exist` / id が integer になっている
+
+スキーマが古い状態（SERIAL PRIMARY KEY）で残っている場合。`setup.sh` が自動検出して修正するが、手動で解決する場合：
+
+```bash
+psql -h postgres -U postgres -d learning -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+psql -h postgres -U postgres -d learning -f /workspace/05_DDD統合/schema.sql
+```
+
+### `g++: command not found`
+
+コンテナイメージが古い可能性がある。Rebuild するか、今すぐ使う場合：
+
+```bash
+apt-get install -y g++
+```
+
+### `go build ./...` でエラー（`pattern ./...`）
+
+Go のモジュールルートに移動してから実行する：
+
+```bash
+cd /workspace/05_DDD統合/go
+go build ./...
+```
+
+または `scripts/go-test.sh` を使うと自動で移動する。
+
 ### PostgreSQL に接続できない
 
 ```bash
-# コンテナの起動状態を確認
 pg_isready -h postgres -U postgres -d learning
-
-# DevContainer を再起動
 # VSCode: Ctrl+Shift+P → "Dev Containers: Rebuild and Reopen in Container"
-```
-
-### コンパイルエラー
-
-```bash
-# libpqxx のバージョン確認
-pkg-config --modversion libpqxx
-
-# g++ のバージョン確認
-g++ --version
-```
-
-### ビルドディレクトリが存在しない
-
-```bash
-mkdir -p /workspace/05_DDD統合/build
 ```
 
 ---
 
-## ファイル構成
+## 関連ファイル
 
 ```
 rdb-learning-postgres/
 ├── .devcontainer/
-│   ├── Dockerfile          # build-essential / libpqxx-dev / libpq-dev を含む
-│   ├── docker-compose.yml  # app + postgres サービス定義
-│   └── setup.sh            # 初回セットアップスクリプト
+│   ├── Dockerfile               # build-essential / libpqxx-dev / Go 1.22
+│   ├── docker-compose.yml       # app + postgres サービス定義
+│   ├── setup.sh                 # スキーマ投入・UUID 型チェック
+│   └── init/01_init_schema.sql  # uuid-ossp 拡張のみ
 ├── 05_DDD統合/
-│   ├── Makefile            # make build / make test
-│   ├── schema.sql          # DB スキーマ（初回セットアップ時に投入）
-│   └── src/
-│       ├── main.cpp        # スモークテスト本体
-│       └── infrastructure/
-│           └── repository/
-│               ├── PgUserRepository.hpp
-│               ├── PgObjectiveRepository.hpp
-│               └── PgKeyResultRepository.hpp
-├── docs/
-│   └── testing.md          # 本ファイル
+│   ├── schema.sql               # DB スキーマ（正）
+│   ├── src/main.cpp             # C++ スモークテスト本体
+│   └── go/cmd/smoke/main.go     # Go スモークテスト本体
 └── scripts/
-    └── test.sh             # テスト実行スクリプト
+    ├── test-all.sh              # C++ + Go 一括テスト
+    ├── test.sh                  # C++ テスト
+    └── go-test.sh               # Go テスト
 ```
