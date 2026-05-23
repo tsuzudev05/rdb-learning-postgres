@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +22,15 @@ jobs:
           wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           chmod +x /usr/local/bin/yq
+
+      - name: Create labels if not exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh label create "enhancement" --repo "$REPO" --color "a2eeef" --description "New feature or request" --force
+          gh label create "C++"        --repo "$REPO" --color "f29513" --description "C++ implementation"      --force
+          gh label create "Go"         --repo "$REPO" --color "00ADD8" --description "Go implementation"        --force
 
       - name: Create issues from backlog.yml
         env:
