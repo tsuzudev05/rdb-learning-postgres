@@ -114,6 +114,8 @@ auto id = result.value();
 | ファイル                                                      | 内容                                      |
 | ------------------------------------------------------------- | ----------------------------------------- |
 | `infrastructure/repository/PgUserRepository.hpp`              | findById / findByEmail / findAll / save（upsert）/ remove |
+| `infrastructure/repository/PgTeamRepository.hpp`              | findById / findByUserId / findAll / save（upsert + TeamMember 一括置換）/ remove |
+| `infrastructure/repository/PgPeriodRepository.hpp`            | findById / findByTeamId / findAll / save（upsert）/ remove |
 | `infrastructure/repository/PgObjectiveRepository.hpp`         | findById / findByPeriodId / findByOwnerId / save（upsert）/ remove |
 | `infrastructure/repository/PgKeyResultRepository.hpp`         | findById / findByObjectiveId / findByOwnerId / save（KeyResult + KrProgressLog 一括）/ remove |
 

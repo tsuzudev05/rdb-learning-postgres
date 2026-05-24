@@ -22,8 +22,13 @@ pg_isready -h postgres -U postgres -d learning \
 echo "✅ DB 接続 OK"
 echo ""
 
-# ─── C++ ───
-echo "--- C++ ---"
+# ─── C++ ヘッダーコンパイル確認（DB 不要）───
+echo "--- C++ コンパイル確認 ---"
+bash "${SCRIPTS_DIR}/check-compile.sh"
+echo ""
+
+# ─── C++ スモークテスト（DB 必要）───
+echo "--- C++ スモークテスト ---"
 bash "${SCRIPTS_DIR}/test.sh"
 echo ""
 
