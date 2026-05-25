@@ -194,21 +194,24 @@ test:  テストのみ
 
 - GitHub: https://github.com/tsuzudev05/rdb-learning-postgres
 - Zenn: https://zenn.dev/tsuzudev05
-### フェーズ6：ユースケース層（C++）🚧
+### フェーズ6：ユースケース層（C++）✅
 
 配置先: `05_DDD統合/src/application/usecase/`
 
 | ファイル                                       | 内容                                  |
 | ---------------------------------------------- | ------------------------------------- |
 | `application/usecase/UserUseCase.hpp`          | CreateUser / GetUser / ListUsers / DeleteUser（DI パターン、Result<T> で統一）|
+| `application/usecase/TeamUseCase.hpp`          | CreateTeam / GetTeam / ListTeams / ListTeamsByUser / DeleteTeam / AddMember / RemoveMember / ChangeMemberRole |
+| `application/usecase/PeriodUseCase.hpp`        | CreatePeriod / GetPeriod / ListPeriods / ListPeriodsByTeam / DeletePeriod |
 
 **設計ポイント:**
-- `IUserRepository` を `shared_ptr` で DI → インフラ層への依存ゼロ
-- 入力 DTO（`CreateUserInput` / `GetUserInput` / `DeleteUserInput`）と出力 DTO（`UserOutput`）を分離
+- `IUserRepository` / `ITeamRepository` / `IPeriodRepository` を `shared_ptr` で DI → インフラ層への依存ゼロ
+- 入力 DTO と出力 DTO を分離（UseCaseOutput::from() ファクトリパターン）
 - `CreateUser` にメールアドレス重複チェックを組み込み
-- `DeleteUser` は冪等（存在しない場合もエラーにしない）
-- `UserId::generate()` を追加（UUID v4 を C++ random で生成）
+- `DeleteUser` / `DeleteTeam` / `DeletePeriod` は冪等（存在しない場合もエラーにしない）
+- `TeamUseCase` は Team 集約操作（AddMember / RemoveMember / ChangeMemberRole）で Read-Modify-Write パターンを採用
+- `UuidId<Tag>::generate()` を共通テンプレートに追加（TeamId / PeriodId / TeamMemberId で再利用）
 
 **要手動確認（DevContainer 内）:**
-- `g++ -std=c++17 -Wall src/application/usecase/UserUseCase.hpp -o /dev/null` でコンパイル確認
-- スモークテストとの結合確認
+- `scripts/check-compile.sh` でコンパイル確認
+- スモークテストへの UseCase 統合確認
