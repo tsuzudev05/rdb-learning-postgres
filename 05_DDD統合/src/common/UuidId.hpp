@@ -2,6 +2,9 @@
 
 #include <string>
 #include <regex>
+#include <random>
+#include <sstream>
+#include <iomanip>
 #include "Result.hpp"
 
 // =============================================================================
@@ -29,6 +32,31 @@ public:
             );
         }
         return Result<UuidId<Tag>>::ok(UuidId<Tag>{value});
+    }
+
+    // ファクトリ：UUID v4 を新規生成
+    // アプリケーション層（UseCase）で新規エンティティ作成時に使用する。
+    static Result<UuidId<Tag>> generate() {
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
+
+        uint64_t hi = dist(gen);
+        uint64_t lo = dist(gen);
+
+        // UUID v4: version=4, variant=10xx
+        hi = (hi & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+        lo = (lo & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0')
+            << std::setw(8) << ((hi >> 32) & 0xFFFFFFFF) << '-'
+            << std::setw(4) << ((hi >> 16) & 0xFFFF)     << '-'
+            << std::setw(4) << (hi & 0xFFFF)              << '-'
+            << std::setw(4) << ((lo >> 48) & 0xFFFF)      << '-'
+            << std::setw(12) << (lo & 0x0000FFFFFFFFFFFFULL);
+
+        return Result<UuidId<Tag>>::ok(UuidId<Tag>{oss.str()});
     }
 
     // 値の取得（DB 保存・比較用）

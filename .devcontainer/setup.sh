@@ -41,18 +41,26 @@ echo "✅ PostgreSQL に接続できました"
 
 # ─────────────────────────────────────────
 # 3. DDD スキーマの投入（05_DDD統合/schema.sql を使用）
-#    users テーブルが存在しない場合のみ投入する（再起動時のデータ消失を防ぐ）
+#    users.id が UUID 型でない場合は古いスキーマとみなして再投入する
 # ─────────────────────────────────────────
 echo "📊 DDD スキーマを確認中..."
-TABLE_EXISTS=$(psql postgresql://postgres:pass@postgres:5432/learning -tAc "SELECT to_regclass('public.users')")
-if [ -z "$TABLE_EXISTS" ]; then
-  echo "  テーブルが存在しないためスキーマを投入します..."
-  psql postgresql://postgres:pass@postgres:5432/learning \
-    -f /workspace/05_DDD統合/schema.sql \
-  && echo "✅ DDD スキーマ投入完了" \
-  || echo "  ⚠️  スキーマ投入でエラーが発生しました"
-else
+DB_URL="postgresql://postgres:pass@postgres:5432/learning"
+ID_TYPE=$(psql "$DB_URL" -tAc \
+  "SELECT data_type FROM information_schema.columns
+   WHERE table_name='users' AND column_name='id'" 2>/dev/null)
+
+if [ "$ID_TYPE" = "uuid" ]; then
   echo "✅ DDD スキーマ投入済み（スキップ）"
+else
+  if [ -n "$ID_TYPE" ]; then
+    echo "  ⚠️  古いスキーマ（id 型: ${ID_TYPE}）を検出。再投入します..."
+    psql "$DB_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+  else
+    echo "  テーブルが存在しないためスキーマを投入します..."
+  fi
+  psql "$DB_URL" -f /workspace/05_DDD統合/schema.sql \
+    && echo "✅ DDD スキーマ投入完了" \
+    || echo "  ⚠️  スキーマ投入でエラーが発生しました"
 fi
 
 # ─────────────────────────────────────────

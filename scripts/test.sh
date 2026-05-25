@@ -10,6 +10,8 @@ set -e
 
 WORKSPACE=/workspace
 DDD_DIR=$WORKSPACE/05_DDD統合
+BUILD_DIR=$DDD_DIR/build
+TARGET=$BUILD_DIR/okr_smoke_test
 
 echo "========================================"
 echo " C++ スモークテスト"
@@ -22,15 +24,25 @@ pg_isready -h postgres -U postgres -d learning \
 echo "✅ DB 接続 OK"
 echo ""
 
+cd "$DDD_DIR"
+
 # ─── ビルド ───
 echo "[1/2] C++ ビルド中..."
-cd "$DDD_DIR"
-make build
+mkdir -p "$BUILD_DIR"
+PQXX_CFLAGS=$(pkg-config --cflags libpqxx 2>/dev/null || echo "")
+PQXX_LIBS=$(pkg-config --libs libpqxx 2>/dev/null || echo "-lpqxx -lpq")
+g++ -std=c++17 -Wall -Wextra \
+    $PQXX_CFLAGS \
+    -I./src \
+    src/main.cpp \
+    $PQXX_LIBS \
+    -o "$TARGET"
+echo "✅ ビルド成功: $TARGET"
 echo ""
 
 # ─── テスト実行 ───
 echo "[2/2] スモークテスト実行中..."
-make test
+DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning "$TARGET"
 
 echo ""
 echo "========================================"

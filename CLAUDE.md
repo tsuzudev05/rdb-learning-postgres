@@ -114,6 +114,8 @@ auto id = result.value();
 | ファイル                                                      | 内容                                      |
 | ------------------------------------------------------------- | ----------------------------------------- |
 | `infrastructure/repository/PgUserRepository.hpp`              | findById / findByEmail / findAll / save（upsert）/ remove |
+| `infrastructure/repository/PgTeamRepository.hpp`              | findById / findByUserId / findAll / save（upsert + TeamMember 一括置換）/ remove |
+| `infrastructure/repository/PgPeriodRepository.hpp`            | findById / findByTeamId / findAll / save（upsert）/ remove |
 | `infrastructure/repository/PgObjectiveRepository.hpp`         | findById / findByPeriodId / findByOwnerId / save（upsert）/ remove |
 | `infrastructure/repository/PgKeyResultRepository.hpp`         | findById / findByObjectiveId / findByOwnerId / save（KeyResult + KrProgressLog 一括）/ remove |
 
@@ -192,3 +194,28 @@ test:  テストのみ
 
 - GitHub: https://github.com/tsuzudev05/rdb-learning-postgres
 - Zenn: https://zenn.dev/tsuzudev05
+### フェーズ6：ユースケース層（C++）✅
+
+配置先: `05_DDD統合/src/application/usecase/`
+
+| ファイル                                       | 内容                                  |
+| ---------------------------------------------- | ------------------------------------- |
+| `application/usecase/UserUseCase.hpp`          | CreateUser / GetUser / ListUsers / DeleteUser（DI パターン、Result<T> で統一）|
+| `application/usecase/TeamUseCase.hpp`          | CreateTeam / GetTeam / ListTeams / ListTeamsByUser / DeleteTeam / AddMember / RemoveMember / ChangeMemberRole |
+| `application/usecase/PeriodUseCase.hpp`        | CreatePeriod / GetPeriod / ListPeriods / ListPeriodsByTeam / DeletePeriod |
+| `application/usecase/ObjectiveUseCase.hpp`     | CreateObjective / GetObjective / ListObjectivesByPeriod / ListObjectivesByOwner / DeleteObjective |
+| `application/usecase/KeyResultUseCase.hpp`     | CreateNumericKeyResult / CreateCheckboxKeyResult / GetKeyResult / ListKeyResultsByObjective / ListKeyResultsByOwner / UpdateNumericProgress / UpdateCheckboxProgress / DeleteKeyResult |
+
+**設計ポイント:**
+- 全 Repository を `shared_ptr` で DI → インフラ層への依存ゼロ
+- 入力 DTO と出力 DTO を分離（UseCaseOutput::from() ファクトリパターン）
+- `CreateUser` にメールアドレス重複チェックを組み込み
+- Delete 系はすべて冪等（存在しない場合もエラーにしない）
+- `TeamUseCase` の AddMember / RemoveMember / ChangeMemberRole は Read-Modify-Write パターン
+- `KeyResultUseCase` の UpdateProgress は Read-Modify-Write パターン（進捗種別チェック付き）
+- KR 作成を numeric / checkbox で別メソッドに分離（型安全な DTO 設計）
+- `UuidId<Tag>::generate()` を共通テンプレートに追加（全 ID 型で共有）
+
+**要手動確認（DevContainer 内）:**
+- `scripts/check-compile.sh` でコンパイル確認
+- スモークテストへの UseCase 統合確認
