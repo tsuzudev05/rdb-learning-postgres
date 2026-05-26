@@ -17,6 +17,9 @@ jobs:
       contents: read
       pull-requests: write   # PR へのコメント投稿に必要
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,14 +47,26 @@ jobs:
 
       - name: Generate diff
         run: |
-          BASE=${{ github.base_ref || inputs.base_branch }}
-          git diff origin/${BASE}...HEAD \
-            -- . \
-            ':(exclude)*.sum' \
-            ':(exclude)*.lock' \
-            ':(exclude)node_modules/**' \
-            ':(exclude).gitkeep' \
-            > diff.txt
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_BRANCH="${{ github.base_ref || inputs.base_branch }}"
+          if [ -n "$BASE_SHA" ]; then
+            git diff ${BASE_SHA}...HEAD \
+              -- . \
+              ':(exclude)*.sum' \
+              ':(exclude)*.lock' \
+              ':(exclude)node_modules/**' \
+              ':(exclude).gitkeep' \
+              > diff.txt
+          else
+            git fetch origin ${BASE_BRANCH}
+            git diff origin/${BASE_BRANCH}...HEAD \
+              -- . \
+              ':(exclude)*.sum' \
+              ':(exclude)*.lock' \
+              ':(exclude)node_modules/**' \
+              ':(exclude).gitkeep' \
+              > diff.txt
+          fi
           echo "diff lines: $(wc -l < diff.txt)"
 
       - name: Run AI Review
@@ -70,4 +85,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .monthly-usage.json
-          key: ai-review-cost-${{ env.YEAR_MONTH }}
+          key: ai-review-cost-${{ env.YEAR_MONTH }}-${{ github.run_id }}
