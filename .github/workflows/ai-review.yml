@@ -3,6 +3,12 @@ name: AI Code Review (Groq)
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: "比較元ブランチ（例: main）"
+        required: false
+        default: "main"
 
 jobs:
   ai-review:
@@ -38,7 +44,8 @@ jobs:
 
       - name: Generate diff
         run: |
-          git diff origin/${{ github.base_ref }}...HEAD \
+          BASE=${{ github.base_ref || inputs.base_branch }}
+          git diff origin/${BASE}...HEAD \
             -- . \
             ':(exclude)*.sum' \
             ':(exclude)*.lock' \
@@ -54,8 +61,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          BASE_BRANCH: ${{ github.base_ref }}
-          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.base_ref || inputs.base_branch }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: python scripts/ai_review.py
 
       - name: Save monthly usage cache
