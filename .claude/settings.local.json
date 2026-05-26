@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(touch \"/mnt/c/Users/taich/develop/転職に向けたスキルアップ/rdb-learning-postgres/PR_DESCRIPTION.md\")",
+      "Read(//mnt/c/Users/taich/develop/転職に向けたスキルアップ/rdb-learning-postgres/**)"
     ]
   }
 }
