@@ -68,6 +68,9 @@ check_header "infrastructure/repository/PgUserRepository.hpp"   "フェーズ4 P
 check_header "infrastructure/repository/PgTeamRepository.hpp"   "フェーズ4 PgTeamRepository"
 check_header "infrastructure/repository/PgPeriodRepository.hpp" "フェーズ4 PgPeriodRepository"
 
+# フェーズ7: CLIプレゼンテーション層
+check_header "presentation/cli/CliApp.hpp" "フェーズ7 CliApp"
+
 # ─── 結果サマリー ─────────────────────────────────────────────────────────────
 echo ""
 echo "========================================"

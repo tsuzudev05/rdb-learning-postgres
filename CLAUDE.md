@@ -219,3 +219,30 @@ test:  テストのみ
 **要手動確認（DevContainer 内）:**
 - `scripts/check-compile.sh` でコンパイル確認
 - スモークテストへの UseCase 統合確認
+
+### フェーズ7：CLI プレゼンテーション層（C++）✅
+
+配置先: `05_DDD統合/src/presentation/cli/`
+
+| ファイル                                       | 内容                                  |
+| ---------------------------------------------- | ------------------------------------- |
+| `presentation/cli/CliApp.hpp`                  | 対話型 CLI（メインループ・コマンドディスパッチ・全 UseCase の DI） |
+| `src/main_cli.cpp`                             | CLI エントリーポイント（DB接続 → Repository → UseCase → CliApp）|
+| `Makefile`（更新）                              | `cli` / `run-cli` ターゲットを追加 |
+
+**対応コマンド:**
+- `user create/list/get/delete`
+- `team create/list/get/add-member`
+- `period create/list/list-by-team/get/delete`
+- `objective create/list/get/delete`
+- `help` / `quit` / `exit`
+
+**設計ポイント:**
+- UseCase を `shared_ptr` で DI → プレゼンテーション層がインフラ層に依存しない
+- 出力先を `std::ostream&` で受け取る → テスト可能な設計
+- `tokenize()` で空白区切りの引数解析
+- Result<T> の失敗をエラー表示してループ継続（落ちない設計）
+
+**要手動確認（DevContainer 内）:**
+- `make cli` でビルド確認
+- `make run-cli` で動作確認（user create → user list → quit）

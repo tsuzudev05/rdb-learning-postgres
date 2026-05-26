@@ -16,7 +16,7 @@
 COMPOSE := docker compose
 APP     := $(COMPOSE) exec app
 
-.PHONY: up down shell build test db db-check logs rebuild setup
+.PHONY: up down shell build test cli run-cli db db-check logs rebuild setup
 
 up:
 	$(COMPOSE) up -d
@@ -45,6 +45,12 @@ build:
 
 test:
 	$(APP) bash -c "cd /workspace/05_DDD統合 && make run"
+
+cli:
+	$(APP) bash -c "cd /workspace/05_DDD統合 && make cli"
+
+run-cli:
+	$(APP) bash -c "cd /workspace/05_DDD統合 && make run-cli"
 
 db:
 	$(APP) psql postgresql://postgres:pass@postgres:5432/learning
