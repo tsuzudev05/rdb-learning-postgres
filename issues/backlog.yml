@@ -16,10 +16,18 @@
 issues:
 
   # ============================================================
+<<<<<<< HEAD
   # フェーズ8 — Go HTTP API 層（echo）
   # ============================================================
 
   - title: "フェーズ8-1：echo セットアップ・API エントリーポイント実装"
+=======
+  # 案1：フェーズ8 — Go HTTP API 層（echo）
+  # ============================================================
+
+  - title: "フェーズ8-1：echo セットアップ・API エントリーポイント実装"
+    labels: ["enhancement", "go", "phase8"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       Go の HTTP フレームワーク echo v4 を導入し、API サーバーのエントリーポイントを実装する。
@@ -40,35 +48,60 @@ issues:
       - echo ドキュメント: https://echo.labstack.com/
 
   - title: "フェーズ8-2：User / Team API エンドポイント実装"
+<<<<<<< HEAD
+=======
+    labels: ["enhancement", "go", "phase8"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       User と Team の REST API エンドポイントを実装する（フェーズ8-1 完了後）。
 
       ## User エンドポイント
       - [ ] `GET  /api/v1/users`        — ユーザー一覧取得
+<<<<<<< HEAD
       - [ ] `POST /api/v1/users`        — ユーザー作成（body: `{"email": "..."}`）
+=======
+      - [ ] `POST /api/v1/users`        — ユーザー作成（body: `{email}`)
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
       - [ ] `GET  /api/v1/users/:id`    — ユーザー取得
       - [ ] `DELETE /api/v1/users/:id`  — ユーザー削除
 
       ## Team エンドポイント
+<<<<<<< HEAD
       - [ ] `GET  /api/v1/teams`                               — チーム一覧
       - [ ] `POST /api/v1/teams`                               — チーム作成
       - [ ] `GET  /api/v1/teams/:id`                           — チーム取得
       - [ ] `DELETE /api/v1/teams/:id`                         — チーム削除
       - [ ] `POST /api/v1/teams/:id/members`                   — メンバー追加
       - [ ] `DELETE /api/v1/teams/:id/members/:member_id`      — メンバー削除
+=======
+      - [ ] `GET  /api/v1/teams`              — チーム一覧
+      - [ ] `POST /api/v1/teams`              — チーム作成（body: `{name, owner_id}`）
+      - [ ] `GET  /api/v1/teams/:id`          — チーム取得
+      - [ ] `DELETE /api/v1/teams/:id`        — チーム削除
+      - [ ] `POST /api/v1/teams/:id/members`  — メンバー追加（body: `{user_id, role}`）
+      - [ ] `DELETE /api/v1/teams/:id/members/:member_id` — メンバー削除
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
 
       ## 受け入れ条件
       - 各エンドポイントが JSON を返す
       - 404 / 400 / 500 を適切に返す
+<<<<<<< HEAD
       - DevContainer 内で curl 動作確認
 
   - title: "フェーズ8-3：Period / Objective API エンドポイント実装"
+=======
+      - `curl` での動作確認（DevContainer 内）
+
+  - title: "フェーズ8-3：Period / Objective API エンドポイント実装"
+    labels: ["enhancement", "go", "phase8"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       Period（期間）と Objective（目標）の REST API エンドポイントを実装する。
 
       ## Period エンドポイント
+<<<<<<< HEAD
       - [ ] `GET  /api/v1/periods`                       — 期間一覧
       - [ ] `POST /api/v1/periods`                       — 期間作成
       - [ ] `GET  /api/v1/periods/:id`                   — 期間取得
@@ -81,63 +114,116 @@ issues:
       - [ ] `GET  /api/v1/objectives/:id`                — 目標取得
       - [ ] `GET  /api/v1/periods/:period_id/objectives` — 期間別目標一覧
       - [ ] `DELETE /api/v1/objectives/:id`              — 目標削除
+=======
+      - [ ] `GET  /api/v1/periods`                         — 期間一覧
+      - [ ] `POST /api/v1/periods`                         — 期間作成（body: `{team_id, year, half, start_date, end_date}`）
+      - [ ] `GET  /api/v1/periods/:id`                     — 期間取得
+      - [ ] `GET  /api/v1/teams/:team_id/periods`          — チーム別期間一覧
+      - [ ] `DELETE /api/v1/periods/:id`                   — 期間削除
+
+      ## Objective エンドポイント
+      - [ ] `GET  /api/v1/objectives`                      — 目標一覧
+      - [ ] `POST /api/v1/objectives`                      — 目標作成（body: `{period_id, owner_id, title}`）
+      - [ ] `GET  /api/v1/objectives/:id`                  — 目標取得
+      - [ ] `GET  /api/v1/periods/:period_id/objectives`   — 期間別目標一覧
+      - [ ] `DELETE /api/v1/objectives/:id`                — 目標削除
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
 
       ## 受け入れ条件
       - 各エンドポイントが JSON を返す
       - DevContainer 内での動作確認
 
   - title: "フェーズ8-4：KeyResult API エンドポイント・エラーハンドリング統一"
+<<<<<<< HEAD
+=======
+    labels: ["enhancement", "go", "phase8"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       KeyResult の REST API エンドポイントを実装し、全エンドポイントのエラーハンドリングと
       レスポンス形式を統一する。
 
       ## KeyResult エンドポイント
+<<<<<<< HEAD
       - [ ] `POST /api/v1/key-results`                             — KR 作成（type: numeric / checkbox）
       - [ ] `GET  /api/v1/key-results/:id`                         — KR 取得
       - [ ] `GET  /api/v1/objectives/:objective_id/key-results`     — 目標別 KR 一覧
       - [ ] `PATCH /api/v1/key-results/:id/progress`               — 進捗更新
+=======
+      - [ ] `POST /api/v1/key-results`                              — KR 作成（numeric / checkbox を type フィールドで切り替え）
+      - [ ] `GET  /api/v1/key-results/:id`                         — KR 取得
+      - [ ] `GET  /api/v1/objectives/:objective_id/key-results`     — 目標別 KR 一覧
+      - [ ] `PATCH /api/v1/key-results/:id/progress`               — 進捗更新（body: `{value}` or `{checked}`）
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
       - [ ] `DELETE /api/v1/key-results/:id`                       — KR 削除
 
       ## エラーハンドリング統一
       - [ ] 統一 JSON エラーレスポンス形式: `{"error": {"code": "NOT_FOUND", "message": "..."}}`
       - [ ] カスタム HTTPErrorHandler を echo に登録
+<<<<<<< HEAD
       - [ ] 400 / 404 / 500 を統一処理
+=======
+      - [ ] バリデーションエラー（400）・Not Found（404）・Internal（500）を統一処理
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
 
       ## 受け入れ条件
       - 全エンドポイントが統一形式の JSON を返す
       - `make run-api` で curl による E2E 確認（DevContainer 内）
 
   # ============================================================
+<<<<<<< HEAD
   # テスト整備 — testcontainers-go
   # ============================================================
 
   - title: "テスト整備-1：testcontainers-go セットアップ・テストヘルパー実装"
+=======
+  # 案2：ユニットテスト・統合テスト整備
+  # ============================================================
+
+  - title: "テスト整備-1：testcontainers-go セットアップ・テストヘルパー実装"
+    labels: ["enhancement", "go", "testing"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       testcontainers-go を使い、本物の PostgreSQL コンテナを起動してリポジトリ層を
       テストする基盤を構築する。
 
       ## タスク
+<<<<<<< HEAD
       - [ ] `go.mod` に testcontainers-go を追加
+=======
+      - [ ] `go.mod` に testcontainers-go を追加（`go get github.com/testcontainers/testcontainers-go`）
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
       - [ ] `internal/testhelper/postgres.go` を作成
         - PostgreSQL 16 コンテナの起動・停止（`TestMain` で管理）
         - `schema.sql` の自動適用
         - テストごとのデータクリーンアップ（TRUNCATE CASCADE）
+<<<<<<< HEAD
+=======
+      - [ ] GitHub Actions の CI ワークフローに Docker-in-Docker 設定（必要な場合）
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
 
       ## 受け入れ条件
       - `go test ./...` でコンテナが起動してテストが実行できる
       - テスト終了後にコンテナが自動クリーンアップされる
 
       ## 参考
+<<<<<<< HEAD
       - https://golang.testcontainers.org/
 
   - title: "テスト整備-2：UserRepository / TeamRepository 統合テスト実装"
+=======
+      - testcontainers-go: https://golang.testcontainers.org/
+
+  - title: "テスト整備-2：UserRepository / TeamRepository 統合テスト実装"
+    labels: ["enhancement", "go", "testing"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       PgUserRepository と PgTeamRepository の統合テストをテーブル駆動テストで実装する。
 
       ## UserRepository テスト
+<<<<<<< HEAD
       - [ ] Save（upsert）/ FindByID / FindByEmail / FindAll / Remove
 
       ## TeamRepository テスト
@@ -148,24 +234,63 @@ issues:
       - `go test ./infrastructure/repository/...` でパス
 
   - title: "テスト整備-3：Period / Objective / KeyResult Repository 統合テスト実装"
+=======
+      - [ ] `TestPgUserRepository_Save` — upsert（新規・更新）
+      - [ ] `TestPgUserRepository_FindByID` — 正常系・Not Found
+      - [ ] `TestPgUserRepository_FindByEmail` — 正常系・Not Found
+      - [ ] `TestPgUserRepository_FindAll` — 空・複数件
+      - [ ] `TestPgUserRepository_Remove` — 存在する・しない
+
+      ## TeamRepository テスト
+      - [ ] `TestPgTeamRepository_Save` — TeamMember 一括管理（追加・削除・ロール変更）
+      - [ ] `TestPgTeamRepository_FindByID` — 正常系・Not Found
+      - [ ] `TestPgTeamRepository_FindByUserID` — メンバー検索
+      - [ ] `TestPgTeamRepository_Remove` — カスケード削除確認
+
+      ## 受け入れ条件
+      - テーブル駆動テスト形式で各境界ケースをカバー
+      - `go test ./infrastructure/repository/...` でパス
+
+  - title: "テスト整備-3：Period / Objective / KeyResult Repository 統合テスト実装"
+    labels: ["enhancement", "go", "testing"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       PgPeriodRepository / PgObjectiveRepository / PgKeyResultRepository の統合テストを実装する。
 
+<<<<<<< HEAD
       ## タスク
       - [ ] Period: Save / FindByID / FindByTeamID / FindAll / Remove
       - [ ] Objective: Save / FindByID / FindByPeriodID / FindByOwnerID / Remove
       - [ ] KeyResult: Save（KrProgressLog 含む）/ FindByID / FindByObjectiveID / Remove（カスケード確認）
+=======
+      ## Period テスト
+      - [ ] `TestPgPeriodRepository_Save` / `FindByID` / `FindByTeamID` / `FindAll` / `Remove`
+
+      ## Objective テスト
+      - [ ] `TestPgObjectiveRepository_Save` / `FindByID` / `FindByPeriodID` / `FindByOwnerID` / `Remove`
+
+      ## KeyResult テスト
+      - [ ] `TestPgKeyResultRepository_Save` — KrProgressLog 一括登録
+      - [ ] `TestPgKeyResultRepository_FindByID` — progress_logs のロード確認
+      - [ ] `TestPgKeyResultRepository_FindByObjectiveID` / `FindByOwnerID`
+      - [ ] `TestPgKeyResultRepository_Remove` — progress_logs カスケード削除
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
 
       ## 受け入れ条件
       - `go test ./infrastructure/repository/...` で全テストパス
 
   - title: "テスト整備-4：UseCase 単体テスト実装（モックリポジトリ）"
+<<<<<<< HEAD
+=======
+    labels: ["enhancement", "go", "testing"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       Repository をモック化し、UseCase のビジネスロジックを単体テストする。
 
       ## タスク
+<<<<<<< HEAD
       - [ ] `go.mod` に testify を追加
       - [ ] モックリポジトリ実装（interface を手動実装 or mockery 自動生成）
       - [ ] UserUseCase: 重複メールエラー・正常系・冪等削除
@@ -177,10 +302,34 @@ issues:
 
   # ============================================================
   # Observability — OpenTelemetry + Jaeger
+=======
+      - [ ] `go.mod` に `github.com/stretchr/testify` を追加
+      - [ ] `internal/mock/` にモックリポジトリを実装（または `mockery` 自動生成）
+      - [ ] `UserUseCase` テスト
+        - `TestCreateUser_DuplicateEmail` — メールアドレス重複エラー
+        - `TestCreateUser_Success`
+        - `TestDeleteUser_Idempotent` — 存在しないIDでも成功
+      - [ ] `TeamUseCase` テスト
+        - `TestAddMember_Success` / `TestRemoveMember_NotFound`
+        - `TestChangeMemberRole_Success`
+      - [ ] `KeyResultUseCase` テスト
+        - `TestUpdateNumericProgress_TypeMismatch` — checkbox KR に numeric を渡すとエラー
+
+      ## 受け入れ条件
+      - DBなしで `go test ./application/...` が実行できる
+      - 境界ケース（重複・型不一致・冪等）をカバー
+
+  # ============================================================
+  # 案5：観測性（Observability）の導入
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
   # （フェーズ8 の API 層完成後に着手）
   # ============================================================
 
   - title: "Observability-1：OpenTelemetry SDK・Jaeger exporter セットアップ"
+<<<<<<< HEAD
+=======
+    labels: ["enhancement", "go", "observability"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       OpenTelemetry Go SDK と Jaeger exporter を導入し、トレーシング基盤を構築する。
@@ -192,19 +341,33 @@ issues:
         - `go.opentelemetry.io/otel/exporters/jaeger`
         - `go.opentelemetry.io/otel/sdk/trace`
       - [ ] `internal/telemetry/tracer.go` — TracerProvider の初期化・シャットダウン
+<<<<<<< HEAD
       - [ ] DevContainer の `docker-compose.yml` に Jaeger サービスを追加
         - image: `jaegertracing/all-in-one:latest`
         - ポート: 16686（UI）/ 14268（collector）
+=======
+      - [ ] `docker-compose.yml`（DevContainer）に Jaeger サービスを追加
+        - image: `jaegertracing/all-in-one:latest`
+        - ポート: 6831/UDP（agent）、16686（UI）、14268（collector）
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
       - [ ] `cmd/api/main.go` に TracerProvider の初期化を組み込む
 
       ## 受け入れ条件
       - `http://localhost:16686` で Jaeger UI にアクセスできる
+<<<<<<< HEAD
 
   - title: "Observability-2：HTTP ハンドラー・pgx へのトレーシング追加"
+=======
+      - 初期スパンが Jaeger に届いていることを確認
+
+  - title: "Observability-2：HTTP ハンドラー・pgx へのトレーシング追加"
+    labels: ["enhancement", "go", "observability"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       echo の HTTP ハンドラーと pgx のクエリ実行にトレーシングを追加する。
 
+<<<<<<< HEAD
       ## タスク
       - [ ] echo 用 OTel ミドルウェア追加（`otelecho`）
       - [ ] pgx の QueryTracer に `otelpgx` を設定
@@ -214,6 +377,23 @@ issues:
       - curl でエンドポイントを叩くと Jaeger UI にトレースが表示される
 
   - title: "Zenn 記事ドラフト：Go REST API × DDD × OpenTelemetry で OKR 管理ツールを作る"
+=======
+      ## HTTP ハンドラー
+      - [ ] echo 用 OTel ミドルウェアを追加（`go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho`）
+      - [ ] 各リクエストでスパンが生成され、HTTP メソッド・パス・ステータスが記録されることを確認
+
+      ## pgx クエリトレーシング
+      - [ ] `pgxpool.Config` の `Tracer` フィールドに `otelpgx` を設定
+        - `go.opentelemetry.io/contrib/instrumentation/github.com/jackc/pgx/v5/otelpgx`
+      - [ ] クエリ実行時間がスパンとして記録されることを確認（Jaeger UI で可視化）
+
+      ## 受け入れ条件
+      - `curl` でエンドポイントを叩くと Jaeger UI にトレースが表示される
+      - クエリスパンが HTTP スパンの子スパンとして紐づいている
+
+  - title: "Zenn 記事ドラフト：Go REST API × DDD × OpenTelemetry で OKR 管理ツールを作る"
+    labels: ["documentation", "zenn"]
+>>>>>>> 39ee31296902869609334c114668e11298e06b80
     body: |
       ## 概要
       フェーズ8（Go REST API）と Observability 導入の内容を Zenn 記事としてまとめる。
@@ -229,3 +409,10 @@ issues:
       - [ ] `zenn-articles/articles/go-ddd-api-observability.md` を作成
       - [ ] `published: false` で生成
       - [ ] `push.yml` に `status: draft` で登録
+<<<<<<< HEAD
+=======
+
+      ## 受け入れ条件
+      - 記事ファイルが作成されている
+      - `published: false` であること
+>>>>>>> 39ee31296902869609334c114668e11298e06b80

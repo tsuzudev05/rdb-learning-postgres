@@ -138,6 +138,40 @@ auto id = result.value();
 - `std::optional<T>` → `*T`（nilポインタ）
 - `pqxx::connection` → `pgxpool.Pool`
 
+### フェーズ5拡張：Go (pgx) Team / Period / Objective / KeyResult 実装 ✅
+
+配置先: `05_DDD統合/go/`
+
+| ファイル                                                        | 内容                                      |
+| --------------------------------------------------------------- | ----------------------------------------- |
+| `domain/model/team/team_id.go`                                  | TeamId 値オブジェクト                    |
+| `domain/model/team/team_member_id.go`                           | TeamMemberId 値オブジェクト              |
+| `domain/model/team/role.go`                                     | Role 値オブジェクト（admin / member）     |
+| `domain/model/team/team_member.go`                              | TeamMember エンティティ（Team集約内）    |
+| `domain/model/team/team.go`                                     | Team 集約ルート（AddMember / RemoveMember / ChangeMemberRole）|
+| `domain/model/period/period_id.go`                              | PeriodId 値オブジェクト                  |
+| `domain/model/period/half.go`                                   | Half 値オブジェクト（H1 / H2）            |
+| `domain/model/period/date_range.go`                             | DateRange 値オブジェクト（start < end 保証）|
+| `domain/model/period/period.go`                                 | Period 集約ルート                         |
+| `domain/model/objective/objective_id.go`                        | ObjectiveId 値オブジェクト               |
+| `domain/model/objective/objective.go`                           | Objective 集約ルート                      |
+| `domain/model/keyresult/key_result_id.go`                       | KeyResultId 値オブジェクト               |
+| `domain/model/keyresult/kr_progress_log_id.go`                  | KrProgressLogId 値オブジェクト           |
+| `domain/model/keyresult/kr_progress_log.go`                     | KrProgressLog エンティティ               |
+| `domain/model/keyresult/key_result.go`                          | KeyResult 集約ルート（numeric / checkbox）|
+| `domain/repository/team_repository.go`                          | TeamRepository インターフェース           |
+| `domain/repository/period_repository.go`                        | PeriodRepository インターフェース         |
+| `domain/repository/objective_repository.go`                     | ObjectiveRepository インターフェース      |
+| `domain/repository/key_result_repository.go`                    | KeyResultRepository インターフェース      |
+| `infrastructure/repository/pg_team_repository.go`               | upsert + team_members 全置換             |
+| `infrastructure/repository/pg_period_repository.go`             | FindByID / FindByTeamID / FindAll / Save / Remove |
+| `infrastructure/repository/pg_objective_repository.go`          | FindByID / FindByPeriodID / FindByOwnerID / Save / Remove |
+| `infrastructure/repository/pg_key_result_repository.go`         | upsert KR + append-only progress logs    |
+| `cmd/smoke/main.go`                                             | スモークテスト拡張（テスト [1]-[26]）     |
+
+**要手動確認（DevContainer 内）:**
+- `bash /workspace/scripts/go-test.sh smoke` でビルド＋スモークテスト実行
+
 ---
 
 ## DBスキーマ
