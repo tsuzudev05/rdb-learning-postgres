@@ -24,15 +24,6 @@ jobs:
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           chmod +x /usr/local/bin/yq
 
-      - name: Create labels if not exist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          gh label create "enhancement" --repo "$REPO" --color "a2eeef" --description "New feature or request" --force
-          gh label create "C++"        --repo "$REPO" --color "f29513" --description "C++ implementation"      --force
-          gh label create "Go"         --repo "$REPO" --color "00ADD8" --description "Go implementation"        --force
-
       - name: Create issues from backlog.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +35,6 @@ jobs:
           for i in $(seq 0 $((COUNT - 1))); do
             TITLE=$(yq ".issues[$i].title" issues/backlog.yml)
             BODY=$(yq ".issues[$i].body" issues/backlog.yml)
-            LABELS=$(yq ".issues[$i].labels | join(\",\")" issues/backlog.yml)
 
             # 同じタイトルの Issue が既に存在するかチェック（重複防止）
             EXISTING=$(gh issue list \
@@ -61,7 +51,6 @@ jobs:
                 --repo "$REPO" \
                 --title "${TITLE}" \
                 --body "${BODY}" \
-                --label "${LABELS}" \
               && echo "✅ 作成: ${TITLE}" \
               || echo "⚠️  作成失敗: ${TITLE}"
             fi
