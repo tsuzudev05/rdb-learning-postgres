@@ -2,8 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(git config *)",
-      "Bash(touch \"/mnt/c/Users/taich/develop/転職に向けたスキルアップ/rdb-learning-postgres/PR_DESCRIPTION.md\")",
-      "Read(//mnt/c/Users/taich/develop/転職に向けたスキルアップ/rdb-learning-postgres/**)"
+      "Bash(touch \"/mnt/c/Users/taich/develop/job-change-prep/rdb-learning-postgres/PR_DESCRIPTION.md\")",
+      "Read(//mnt/c/Users/taich/develop/job-change-prep/rdb-learning-postgres/**)",
+      "Bash(git -C \"C:/Users/taich/develop/job-change-prep/rdb-learning-postgres\" status)",
+      "Bash(git -C \"C:/Users/taich/develop/job-change-prep/rdb-learning-postgres\" log --oneline -5)",
+      "Bash(git *)",
+      "Bash(go env *)",
+      "Bash(curl -s \"https://proxy.golang.org/github.com/labstack/echo/v4/@v/v4.15.2.info\")",
+      "Bash(go build *)",
+      "Bash(go mod *)"
     ]
   }
 }

@@ -4,10 +4,6 @@
   "service": "app",
   "workspaceFolder": "/workspace",
 
-  "features": {
-    "ghcr.io/devcontainers/features/git:1": {}
-  },
-
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
   ],

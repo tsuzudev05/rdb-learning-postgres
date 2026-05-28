@@ -280,3 +280,23 @@ test:  テストのみ
 **要手動確認（DevContainer 内）:**
 - `make cli` でビルド確認
 - `make run-cli` で動作確認（user create → user list → quit）
+
+### フェーズ8-1：echo セットアップ・API エントリーポイント（Go）⬜→✅
+
+配置先: `05_DDD統合/go/`
+
+| ファイル                        | 内容                                                                |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `cmd/api/main.go`               | API サーバーエントリーポイント（echo v4・Logger/Recover・/api/v1/ ルーティング・全 Repository DI） |
+| `Makefile`（新規）              | `smoke` / `run-smoke` / `api` / `run-api` / `build-all` ターゲット |
+
+**設計ポイント:**
+- echo の `HideBanner: true` でバナー非表示
+- `middleware.Logger()` + `middleware.Recover()` でログ出力とパニック回復
+- `/api/v1/` グループにヘルスチェック `GET /api/v1/` を設置（JSON: `{"status":"ok","service":"okr-api","version":"v1"}`）
+- 全 Repository を生成し `_` で退避 → フェーズ8-2 でハンドラーに渡す
+
+**要手動確認（DevContainer 内）:**
+- `go get github.com/labstack/echo/v4` で go.mod / go.sum を更新
+- `make api` でビルド確認
+- `make run-api` でサーバー起動 → `curl http://localhost:8080/api/v1/` でレスポンス確認
