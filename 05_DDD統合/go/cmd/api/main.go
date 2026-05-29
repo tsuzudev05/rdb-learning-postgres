@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/tsuzudev05/rdb-learning-postgres/okr/handler"
 	infrarepo "github.com/tsuzudev05/rdb-learning-postgres/okr/infrastructure/repository"
 )
 
@@ -56,9 +57,7 @@ func main() {
 	objectiveRepo := infrarepo.NewPgObjectiveRepository(pool)
 	keyResultRepo := infrarepo.NewPgKeyResultRepository(pool)
 
-	// 未使用変数警告を抑制（フェーズ8-2 でハンドラーに渡す時点で削除）
-	_ = userRepo
-	_ = teamRepo
+	// フェーズ8-3/8-4 で使用（現時点では未接続）
 	_ = periodRepo
 	_ = objectiveRepo
 	_ = keyResultRepo
@@ -69,6 +68,10 @@ func main() {
 
 	e.Use(middleware.Logger())   // リクエストログ
 	e.Use(middleware.Recover())  // パニックリカバリ
+
+	// ── ハンドラー（ユースケース層の代わりに Repository を直接 DI）──────────────
+	userHandler := handler.NewUserHandler(userRepo)
+	teamHandler := handler.NewTeamHandler(teamRepo)
 
 	// ── ルーティング ─────────────────────────────────────────────────────────────
 	v1 := e.Group("/api/v1")
@@ -82,21 +85,20 @@ func main() {
 		})
 	})
 
-	// ── フェーズ8-2 以降で追加予定 ───────────────────────────────────────────────
-	// User エンドポイント
-	//   v1.GET("/users",       userHandler.List)
-	//   v1.POST("/users",      userHandler.Create)
-	//   v1.GET("/users/:id",   userHandler.Get)
-	//   v1.DELETE("/users/:id", userHandler.Delete)
-	//
-	// Team エンドポイント
-	//   v1.GET("/teams",                              teamHandler.List)
-	//   v1.POST("/teams",                             teamHandler.Create)
-	//   v1.GET("/teams/:id",                          teamHandler.Get)
-	//   v1.DELETE("/teams/:id",                       teamHandler.Delete)
-	//   v1.POST("/teams/:id/members",                 teamHandler.AddMember)
-	//   v1.DELETE("/teams/:id/members/:member_id",    teamHandler.RemoveMember)
-	//
+	// User エンドポイント（フェーズ8-2）
+	v1.GET("/users", userHandler.List)
+	v1.POST("/users", userHandler.Create)
+	v1.GET("/users/:id", userHandler.Get)
+	v1.DELETE("/users/:id", userHandler.Delete)
+
+	// Team エンドポイント（フェーズ8-2）
+	v1.GET("/teams", teamHandler.List)
+	v1.POST("/teams", teamHandler.Create)
+	v1.GET("/teams/:id", teamHandler.Get)
+	v1.DELETE("/teams/:id", teamHandler.Delete)
+	v1.POST("/teams/:id/members", teamHandler.AddMember)
+	v1.DELETE("/teams/:id/members/:user_id", teamHandler.RemoveMember)
+
 	// フェーズ8-3: Period / Objective
 	// フェーズ8-4: KeyResult + 統一エラーハンドリング
 
