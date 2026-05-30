@@ -23,17 +23,35 @@ go/
         └── pg_user_repository.go    # pgx 実装: PgUserRepository
 ```
 
-## 実行方法（DevContainer 内）
+## 実行方法
+
+### DevContainer（VS Code）
+
+`docker-compose.yml` の `postgres` サービスが自動起動するため、DB の手動セットアップは不要。
 
 ```bash
 cd /workspace/05_DDD統合/go
 
-# 依存解決（初回のみ）
-go mod tidy
-
-# スモークテスト実行
-go run ./cmd/smoke
+make run-api    # API サーバー起動（http://localhost:8080）
+make run-smoke  # スモークテスト実行
 ```
+
+### Claude Code 環境（コンテナ再起動後）
+
+この環境では PostgreSQL サーバーがコンテナ再起動で停止する。**起動のたびに `make init` が必要。**
+
+```bash
+cd /workspace/05_DDD統合/go
+
+make init       # PostgreSQL 起動 + DB・スキーマ初期化（冪等）
+make run-api    # API サーバー起動（http://localhost:8080）
+```
+
+`make init` が行うこと:
+- `pg_ctlcluster 16 main start` でローカル PostgreSQL を起動
+- `/etc/hosts` に `127.0.0.1 postgres` を追加（未登録の場合のみ）
+- `learning` データベースを作成（未作成の場合のみ）
+- `schema.sql` を適用（未適用の場合のみ）
 
 ## C++ 実装との対応
 

@@ -74,6 +74,7 @@ if (!result) { /* result.error() でメッセージ取得 */ }
 | フェーズ7 | C++ CLI プレゼンテーション層（CliApp.hpp・main_cli.cpp・Makefile） | ✅ |
 | フェーズ8-1 | Go echo セットアップ・ヘルスチェック API（cmd/api/main.go・Makefile） | ✅ |
 | フェーズ8-2 | Go User / Team API エンドポイント（handler/user_handler.go・team_handler.go） | ✅ |
+| フェーズ8-3 | Go Period / Objective API エンドポイント（handler/period_handler.go・objective_handler.go） | ✅ |
 
 ### Go API エンドポイント一覧
 
@@ -83,6 +84,10 @@ GET/DELETE /api/v1/users/:id
 GET/POST   /api/v1/teams
 GET/DELETE /api/v1/teams/:id
 POST/DELETE /api/v1/teams/:id/members[/:user_id]
+GET/POST   /api/v1/periods
+GET/DELETE /api/v1/periods/:id
+GET/POST   /api/v1/objectives
+GET/DELETE /api/v1/objectives/:id
 ```
 
 ---

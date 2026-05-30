@@ -10,7 +10,30 @@
       "Bash(go env *)",
       "Bash(curl -s \"https://proxy.golang.org/github.com/labstack/echo/v4/@v/v4.15.2.info\")",
       "Bash(go build *)",
-      "Bash(go mod *)"
+      "Bash(go mod *)",
+      "Bash(pg_isready -h localhost -p 5432 -U postgres)",
+      "Bash(nc -zv localhost 5432)",
+      "Bash(ip route *)",
+      "Bash(getent hosts *)",
+      "Bash(pg_isready -h host.docker.internal -p 5432 -U postgres)",
+      "Bash(timeout 3 bash -c \"echo > /dev/tcp/host.docker.internal/5432\")",
+      "Bash(awk '{print $2}')",
+      "Read(//var/run/**)",
+      "Bash(pg_lsclusters)",
+      "Bash(pg_config --version)",
+      "Read(//usr/lib/postgresql/**)",
+      "Bash(pg_createcluster 16 *)",
+      "Read(//usr/**)",
+      "Bash(dpkg -l)",
+      "Bash(apt-get install *)",
+      "Bash(apt-cache search *)",
+      "Bash(apt-get update *)",
+      "Bash(pg_ctlcluster 16 *)",
+      "Bash(pg_isready -h localhost -p 5432)",
+      "Bash(su *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(PGPASSWORD=pass psql *)",
+      "Bash(timeout 15 make run-api)"
     ]
   }
 }
