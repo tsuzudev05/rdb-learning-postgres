@@ -57,9 +57,7 @@ func main() {
 	objectiveRepo := infrarepo.NewPgObjectiveRepository(pool)
 	keyResultRepo := infrarepo.NewPgKeyResultRepository(pool)
 
-	// フェーズ8-3/8-4 で使用（現時点では未接続）
-	_ = periodRepo
-	_ = objectiveRepo
+	// フェーズ8-4 で使用（現時点では未接続）
 	_ = keyResultRepo
 
 	// ── echo インスタンス・ミドルウェア設定 ─────────────────────────────────────
@@ -70,8 +68,10 @@ func main() {
 	e.Use(middleware.Recover())  // パニックリカバリ
 
 	// ── ハンドラー（ユースケース層の代わりに Repository を直接 DI）──────────────
-	userHandler := handler.NewUserHandler(userRepo)
-	teamHandler := handler.NewTeamHandler(teamRepo)
+	userHandler      := handler.NewUserHandler(userRepo)
+	teamHandler      := handler.NewTeamHandler(teamRepo)
+	periodHandler    := handler.NewPeriodHandler(periodRepo)
+	objectiveHandler := handler.NewObjectiveHandler(objectiveRepo)
 
 	// ── ルーティング ─────────────────────────────────────────────────────────────
 	v1 := e.Group("/api/v1")
@@ -99,7 +99,18 @@ func main() {
 	v1.POST("/teams/:id/members", teamHandler.AddMember)
 	v1.DELETE("/teams/:id/members/:user_id", teamHandler.RemoveMember)
 
-	// フェーズ8-3: Period / Objective
+	// Period エンドポイント（フェーズ8-3）
+	v1.GET("/periods", periodHandler.List)
+	v1.POST("/periods", periodHandler.Create)
+	v1.GET("/periods/:id", periodHandler.Get)
+	v1.DELETE("/periods/:id", periodHandler.Delete)
+
+	// Objective エンドポイント（フェーズ8-3）
+	v1.GET("/objectives", objectiveHandler.List)
+	v1.POST("/objectives", objectiveHandler.Create)
+	v1.GET("/objectives/:id", objectiveHandler.Get)
+	v1.DELETE("/objectives/:id", objectiveHandler.Delete)
+
 	// フェーズ8-4: KeyResult + 統一エラーハンドリング
 
 	// ── サーバー起動 ─────────────────────────────────────────────────────────────
