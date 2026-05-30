@@ -1,5 +1,0 @@
-🚀 OKR API サーバーを起動します: http://localhost:8080
-DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning go run ./cmd/api
-2026/05/30 10:45:09 DB疎通確認失敗: failed to connect to `host=postgres user=postgres database=learning`: hostname resolving error (lookup postgres on 127.0.0.11:53: no such host)
-exit status 1
-make: *** [Makefile:33: run-api] Error 1
