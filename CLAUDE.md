@@ -75,6 +75,7 @@ if (!result) { /* result.error() でメッセージ取得 */ }
 | フェーズ8-1 | Go echo セットアップ・ヘルスチェック API（cmd/api/main.go・Makefile） | ✅ |
 | フェーズ8-2 | Go User / Team API エンドポイント（handler/user_handler.go・team_handler.go） | ✅ |
 | フェーズ8-3 | Go Period / Objective API エンドポイント（handler/period_handler.go・objective_handler.go） | ✅ |
+| フェーズ8-4 | Go KeyResult API エンドポイント（handler/keyresult_handler.go）・統一エラーハンドリング | ✅ |
 
 ### Go API エンドポイント一覧
 
@@ -88,6 +89,8 @@ GET/POST   /api/v1/periods
 GET/DELETE /api/v1/periods/:id
 GET/POST   /api/v1/objectives
 GET/DELETE /api/v1/objectives/:id
+GET/POST   /api/v1/key_results          # ?objective_id= or ?owner_id=
+GET/DELETE /api/v1/key_results/:id
 ```
 
 ---

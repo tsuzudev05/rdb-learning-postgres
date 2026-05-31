@@ -57,21 +57,39 @@ func main() {
 	objectiveRepo := infrarepo.NewPgObjectiveRepository(pool)
 	keyResultRepo := infrarepo.NewPgKeyResultRepository(pool)
 
-	// フェーズ8-4 で使用（現時点では未接続）
-	_ = keyResultRepo
-
 	// ── echo インスタンス・ミドルウェア設定 ─────────────────────────────────────
 	e := echo.New()
 	e.HideBanner = true
 
-	e.Use(middleware.Logger())   // リクエストログ
-	e.Use(middleware.Recover())  // パニックリカバリ
+	e.Use(middleware.Logger())  // リクエストログ
+	e.Use(middleware.Recover()) // パニックリカバリ
+
+	// ── 統一エラーハンドリング（フェーズ8-4）────────────────────────────────────
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		code := http.StatusInternalServerError
+		msg := "内部サーバーエラー"
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+			if s, ok := he.Message.(string); ok {
+				msg = s
+			}
+		}
+		if !c.Response().Committed {
+			_ = c.JSON(code, map[string]interface{}{
+				"error": map[string]interface{}{
+					"code":    code,
+					"message": msg,
+				},
+			})
+		}
+	}
 
 	// ── ハンドラー（ユースケース層の代わりに Repository を直接 DI）──────────────
-	userHandler      := handler.NewUserHandler(userRepo)
-	teamHandler      := handler.NewTeamHandler(teamRepo)
-	periodHandler    := handler.NewPeriodHandler(periodRepo)
-	objectiveHandler := handler.NewObjectiveHandler(objectiveRepo)
+	userHandler        := handler.NewUserHandler(userRepo)
+	teamHandler        := handler.NewTeamHandler(teamRepo)
+	periodHandler      := handler.NewPeriodHandler(periodRepo)
+	objectiveHandler   := handler.NewObjectiveHandler(objectiveRepo)
+	keyResultHandler   := handler.NewKeyResultHandler(keyResultRepo)
 
 	// ── ルーティング ─────────────────────────────────────────────────────────────
 	v1 := e.Group("/api/v1")
@@ -111,7 +129,11 @@ func main() {
 	v1.GET("/objectives/:id", objectiveHandler.Get)
 	v1.DELETE("/objectives/:id", objectiveHandler.Delete)
 
-	// フェーズ8-4: KeyResult + 統一エラーハンドリング
+	// KeyResult エンドポイント（フェーズ8-4）
+	v1.GET("/key_results", keyResultHandler.List)
+	v1.POST("/key_results", keyResultHandler.Create)
+	v1.GET("/key_results/:id", keyResultHandler.Get)
+	v1.DELETE("/key_results/:id", keyResultHandler.Delete)
 
 	// ── サーバー起動 ─────────────────────────────────────────────────────────────
 	addr := ":8080"
