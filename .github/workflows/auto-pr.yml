@@ -1,0 +1,73 @@
+name: Auto PR Creator
+
+on:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+    inputs:
+      head_branch:
+        description: "PR にするブランチ名（例: feature/test-infra-2-user-repo-test）"
+        required: true
+      base_branch:
+        description: "マージ先ブランチ（デフォルト: main）"
+        required: false
+        default: "main"
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # 手動実行時は指定ブランチを、push 時は push されたブランチを checkout する
+          ref: ${{ inputs.head_branch || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install groq
+
+      - name: Resolve branch names
+        run: |
+          echo "HEAD_BRANCH=${{ inputs.head_branch || github.ref_name }}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ inputs.base_branch || 'main' }}"          >> $GITHUB_ENV
+
+      - name: Generate diff (vs base branch)
+        run: |
+          git fetch origin ${{ env.BASE_BRANCH }}
+          git diff origin/${{ env.BASE_BRANCH }}...HEAD \
+            -- . \
+            ':(exclude)*.sum' \
+            ':(exclude)*.lock' \
+            ':(exclude)node_modules/**' \
+            > diff.txt
+          echo "diff lines: $(wc -l < diff.txt)"
+
+      - name: Get commit log
+        run: |
+          LOG=$(git log origin/${{ env.BASE_BRANCH }}..HEAD --oneline)
+          echo "COMMIT_LOG<<EOF" >> $GITHUB_ENV
+          echo "$LOG"           >> $GITHUB_ENV
+          echo "EOF"            >> $GITHUB_ENV
+
+      - name: Create PR with AI-generated description
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_BRANCH:  ${{ env.HEAD_BRANCH }}
+          BASE_BRANCH:  ${{ env.BASE_BRANCH }}
+          COMMIT_LOG:   ${{ env.COMMIT_LOG }}
+        run: python scripts/auto_pr.py
