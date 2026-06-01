@@ -1,9 +1,6 @@
 name: Auto PR Creator
 
 on:
-  push:
-    branches-ignore:
-      - main
   # 手動実行は必ず "Use workflow from: main" を選択すること
   workflow_dispatch:
     inputs:
