@@ -25,12 +25,14 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Checkout
+      - name: Checkout main (scripts always from main)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # 手動実行時は指定ブランチを、push 時は push されたブランチを checkout する
-          ref: ${{ inputs.head_branch || github.ref }}
+          ref: main
+
+      - name: Fetch head branch
+        run: git fetch origin ${{ inputs.head_branch || github.ref_name }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,8 +49,7 @@ jobs:
 
       - name: Generate diff (vs base branch)
         run: |
-          git fetch origin ${{ env.BASE_BRANCH }}
-          git diff origin/${{ env.BASE_BRANCH }}...HEAD \
+          git diff origin/${{ env.BASE_BRANCH }}...origin/${{ env.HEAD_BRANCH }} \
             -- . \
             ':(exclude)*.sum' \
             ':(exclude)*.lock' \
@@ -58,7 +59,7 @@ jobs:
 
       - name: Get commit log
         run: |
-          LOG=$(git log origin/${{ env.BASE_BRANCH }}..HEAD --oneline)
+          LOG=$(git log origin/${{ env.BASE_BRANCH }}..origin/${{ env.HEAD_BRANCH }} --oneline)
           echo "COMMIT_LOG<<EOF" >> $GITHUB_ENV
           echo "$LOG"           >> $GITHUB_ENV
           echo "EOF"            >> $GITHUB_ENV
