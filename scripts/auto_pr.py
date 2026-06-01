@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """
 auto_pr.py — ブランチの diff を Groq に渡して PR タイトル・本文を生成し、
-             GitHub CLI（gh）で PR を自動作成するスクリプト。
+             GitHub REST API で PR を自動作成するスクリプト。
+             （gh CLI は使わない。GITHUB_TOKEN の制限を避けるため GH_PAT を使用）
 
 Usage (GitHub Actions から呼ばれる):
     python scripts/auto_pr.py
 
 必要な環境変数:
     GROQ_API_KEY   Groq API キー（GitHub Secret に登録）
-    GITHUB_TOKEN   GitHub Actions が自動で提供（gh コマンドが使用）
+    GH_PAT         GitHub Personal Access Token（repo スコープ）
     HEAD_BRANCH    PR のブランチ名（github.ref_name）
     BASE_BRANCH    マージ先ブランチ名（デフォルト: main）
-    REPO           "owner/repo" 形式
+    REPO           "owner/repo" 形式（例: tsuzudev05/rdb-learning-postgres）
     COMMIT_LOG     git log --oneline の出力
 """
 
 import os
+import re
 import sys
 import json
-import subprocess
+import urllib.request
+import urllib.error
 
 from groq import Groq
 
@@ -66,7 +69,7 @@ def build_user_prompt(commit_log: str, diff: str) -> str:
 ## コミット一覧
 {commit_log}
 
-## git diff（main との差分）
+## git diff（{os.environ.get('BASE_BRANCH', 'main')} との差分）
 ```diff
 {diff_truncated}
 ```
@@ -88,38 +91,50 @@ def generate_pr_description(commit_log: str, diff: str) -> tuple[str, str]:
 
     content = response.choices[0].message.content.strip()
 
-    # JSON 部分だけ抽出（```json ... ``` で囲まれている場合も対応）
-    if "```" in content:
-        import re
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
-        if m:
-            content = m.group(1)
+    # ```json ... ``` で囲まれている場合も対応
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+    if m:
+        content = m.group(1)
 
     data = json.loads(content)
     return data["title"], data["body"]
 
-# ─── gh pr create ─────────────────────────────────────────────────────────────
+# ─── GitHub REST API で PR 作成 ────────────────────────────────────────────────
 
-def create_pr(title: str, body: str, head: str, base: str) -> None:
-    result = subprocess.run(
-        [
-            "gh", "pr", "create",
-            "--title", title,
-            "--body",  body,
-            "--head",  head,
-            "--base",  base,
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        # 既に PR が存在する場合はスキップ（エラーではない）
-        if "already exists" in result.stderr or "already exists" in result.stdout:
+def create_pr_via_api(title: str, body: str, head: str, base: str, repo: str) -> None:
+    token = os.environ.get("GH_PAT") or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        print("❌ GH_PAT も GITHUB_TOKEN も設定されていません", file=sys.stderr)
+        sys.exit(1)
+
+    url  = f"https://api.github.com/repos/{repo}/pulls"
+    data = json.dumps({
+        "title": title,
+        "body":  body,
+        "head":  head,
+        "base":  base,
+    }).encode("utf-8")
+
+    headers = {
+        "Authorization":        f"Bearer {token}",
+        "Accept":               "application/vnd.github+json",
+        "Content-Type":         "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+            print(f"✅ PR created: {result['html_url']}")
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        # 既に PR が存在する場合はスキップ
+        if e.code == 422 and "already exists" in err_body:
             print(f"ℹ️  PR already exists for branch '{head}' — skipping.")
             return
-        print(f"❌ gh pr create failed:\n{result.stderr}", file=sys.stderr)
+        print(f"❌ GitHub API error {e.code}:\n{err_body}", file=sys.stderr)
         sys.exit(1)
-    print(f"✅ PR created: {result.stdout.strip()}")
 
 # ─── main ─────────────────────────────────────────────────────────────────────
 
@@ -127,17 +142,20 @@ def main() -> None:
     head_branch = os.environ.get("HEAD_BRANCH", "")
     base_branch = os.environ.get("BASE_BRANCH", "main")
     commit_log  = os.environ.get("COMMIT_LOG", "(コミット情報なし)")
+    repo        = os.environ.get("REPO", "")
 
     if not head_branch:
         print("❌ HEAD_BRANCH が設定されていません", file=sys.stderr)
         sys.exit(1)
+    if not repo:
+        print("❌ REPO が設定されていません", file=sys.stderr)
+        sys.exit(1)
 
-    # diff を読み込む
     try:
         with open(DIFF_FILE, encoding="utf-8") as f:
             diff = f.read()
     except FileNotFoundError:
-        diff = "(差分ファイルが見つかりません)"
+        diff = ""
 
     if not diff.strip():
         print("⚠️  diff が空です。PR の作成をスキップします。")
@@ -145,9 +163,9 @@ def main() -> None:
 
     print(f"🤖 Generating PR description with Groq ({MODEL})...")
     title, body = generate_pr_description(commit_log, diff)
-    print(f"\n📝 Title: {title}")
+    print(f"📝 Title: {title}")
 
-    create_pr(title, body, head_branch, base_branch)
+    create_pr_via_api(title, body, head_branch, base_branch, repo)
 
 
 if __name__ == "__main__":
