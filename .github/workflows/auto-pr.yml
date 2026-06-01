@@ -4,15 +4,28 @@ on:
   push:
     branches-ignore:
       - main
+  # 手動実行は必ず "Use workflow from: main" を選択すること
   workflow_dispatch:
     inputs:
       head_branch:
-        description: "PR にするブランチ名（例: feature/test-infra-2-user-repo-test）"
+        description: "PR にするブランチ名（リストにない場合は直接入力も可）"
         required: true
+        type: choice
+        options:
+          - feature/test-infra-1-testcontainers-setup
+          - feature/test-infra-2-user-repo-test
+          - feature/test-infra-3-period-objective-kr-test
+          - feature/test-infra-4-usecase-mock-test
+          - feature/observability-1-otel-setup
+          - feature/observability-2-tracing
+          - other
       base_branch:
-        description: "マージ先ブランチ（デフォルト: main）"
+        description: "マージ先ブランチ"
         required: false
         default: "main"
+        type: choice
+        options:
+          - main
 
 jobs:
   create-pr:
@@ -44,8 +57,13 @@ jobs:
 
       - name: Resolve branch names
         run: |
-          echo "HEAD_BRANCH=${{ inputs.head_branch || github.ref_name }}" >> $GITHUB_ENV
-          echo "BASE_BRANCH=${{ inputs.base_branch || 'main' }}"          >> $GITHUB_ENV
+          HEAD="${{ inputs.head_branch || github.ref_name }}"
+          if [ "$HEAD" = "other" ]; then
+            echo "❌ 'other' を選択した場合はブランチ名を直接入力してください" >&2
+            exit 1
+          fi
+          echo "HEAD_BRANCH=$HEAD"                          >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ inputs.base_branch || 'main' }}" >> $GITHUB_ENV
 
       - name: Generate diff (vs base branch)
         run: |
