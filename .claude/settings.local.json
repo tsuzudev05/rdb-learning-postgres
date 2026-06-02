@@ -33,7 +33,8 @@
       "Bash(su *)",
       "Bash(grep -v \"^$\")",
       "Bash(PGPASSWORD=pass psql *)",
-      "Bash(timeout 15 make run-api)"
+      "Bash(timeout 15 make run-api)",
+      "Bash(go test *)"
     ]
   }
 }
