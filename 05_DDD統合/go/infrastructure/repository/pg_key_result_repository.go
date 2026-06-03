@@ -190,10 +190,6 @@ func scanKeyResult(s interface{ Scan(...any) error }) (keyresult.KeyResult, erro
 		if err != nil {
 			return keyresult.KeyResult{}, err
 		}
-		// reflect currentValue into the KR via a progress-log-free update
-		if currentValue != nil {
-			_ = currentValue // currentValue is set on Load; progress logs are loaded separately
-		}
 		return kr, nil
 	}
 
