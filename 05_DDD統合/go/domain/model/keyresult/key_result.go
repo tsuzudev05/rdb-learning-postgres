@@ -116,7 +116,17 @@ func (k *KeyResult) UpdateCheckboxProgress(log KrProgressLog) error {
 }
 
 // WithProgressLogs returns a new KeyResult with the given logs (used by Repository on load).
+// It also restores currentValue / isCompleted from the latest log so the aggregate
+// state is consistent after reconstruction from DB.
 func (k KeyResult) WithProgressLogs(logs []KrProgressLog) KeyResult {
 	k.progressLogs = logs
+	for _, log := range logs {
+		if log.NumericValue() != nil {
+			k.currentValue = log.NumericValue()
+		}
+		if log.Completed() != nil {
+			k.isCompleted = *log.Completed()
+		}
+	}
 	return k
 }
