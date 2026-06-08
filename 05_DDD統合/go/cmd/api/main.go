@@ -9,6 +9,7 @@
 //	DATABASE_URL=postgresql://postgres:pass@postgres:5432/learning go run ./cmd/api
 //
 // 環境変数 DATABASE_URL が設定されていない場合は既定の接続文字列を使用する。
+// 環境変数 OTEL_EXPORTER_OTLP_ENDPOINT が設定されていない場合は jaeger:4317 を使用する。
 package main
 
 import (
@@ -21,8 +22,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/handler"
 	infrarepo "github.com/tsuzudev05/rdb-learning-postgres/okr/infrastructure/repository"
+	"github.com/tsuzudev05/rdb-learning-postgres/okr/internal/telemetry"
 )
 
 const defaultDSN = "postgresql://postgres:pass@postgres:5432/learning"
@@ -36,6 +40,19 @@ func connString() string {
 
 func main() {
 	ctx := context.Background()
+
+	// ── OpenTelemetry TracerProvider 初期化 ──────────────────────────────────────
+	tp, err := telemetry.InitTracer(ctx, "okr-api")
+	if err != nil {
+		log.Printf("⚠️  OpenTelemetry 初期化失敗（トレースなしで続行）: %v", err)
+	} else {
+		defer func() {
+			if err := tp.Shutdown(ctx); err != nil {
+				log.Printf("TracerProvider シャットダウンエラー: %v", err)
+			}
+		}()
+		log.Println("✅ OpenTelemetry TracerProvider 初期化成功")
+	}
 
 	// ── DB 接続 ──────────────────────────────────────────────────────────────────
 	pool, err := pgxpool.New(ctx, connString())
@@ -61,6 +78,7 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 
+	e.Use(otelecho.Middleware("okr-api"))
 	e.Use(middleware.Logger())  // リクエストログ
 	e.Use(middleware.Recover()) // パニックリカバリ
 

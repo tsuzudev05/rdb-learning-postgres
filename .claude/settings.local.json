@@ -34,7 +34,23 @@
       "Bash(grep -v \"^$\")",
       "Bash(PGPASSWORD=pass psql *)",
       "Bash(timeout 15 make run-api)",
-      "Bash(go test *)"
+      "Bash(go test *)",
+      "Bash(timeout 5 go run ./cmd/api)",
+      "Bash(go get *)",
+      "Bash(go run *)",
+      "Bash(curl -s http://localhost:8080/api/v1/)",
+      "Bash(kill %1)",
+      "Bash(nc -zv jaeger 4317)",
+      "Bash(curl -s http://jaeger:16686/api/services)",
+      "Bash(curl -s --connect-timeout 3 http://jaeger:16686/api/services)",
+      "Bash(curl -s --connect-timeout 3 http://localhost:16686/api/services)",
+      "Bash(timeout 3 bash -c \"echo > /dev/tcp/jaeger/4317\")",
+      "Bash(timeout 3 bash -c \"echo > /dev/tcp/localhost/16686\")",
+      "Bash(echo \"---exit:$?\")",
+      "Bash(timeout 3 bash -c \"echo > /dev/tcp/jaeger/16686\")",
+      "Read(//etc/**)",
+      "PowerShell(docker rm -f jaeger 2>&1)",
+      "PowerShell(docker rm -f pg-dev 2>&1)"
     ]
   }
 }

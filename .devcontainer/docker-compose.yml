@@ -9,6 +9,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     environment:
       # PostgreSQL 接続情報のみ（ANTHROPIC_API_KEY は不要）
       POSTGRES_HOST: postgres
@@ -17,6 +19,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pass
       DATABASE_URL: postgresql://postgres:pass@postgres:5432/learning
+      # OpenTelemetry — Jaeger OTLP gRPC エンドポイント
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     networks:
       - dev-network
 
@@ -37,6 +41,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - dev-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
     networks:
       - dev-network
 

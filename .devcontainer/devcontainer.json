@@ -5,12 +5,12 @@
   "workspaceFolder": "/workspace",
 
   "mounts": [
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
   ],
 
   "remoteEnv": {
     "GIT_USER_NAME": "${localEnv:GIT_USER_NAME}",
-    "GIT_USER_EMAIL": "${localEnv:GIT_USER_EMAIL}"
+    "GIT_USER_EMAIL": "${localEnv:GIT_USER_EMAIL}",
   },
 
   "customizations": {
@@ -23,7 +23,7 @@
         "GitHub.copilot",
         "streetsidesoftware.code-spell-checker-japanese",
         "yzhang.markdown-all-in-one",
-        "hediet.vscode-drawio"
+        "hediet.vscode-drawio",
       ],
       "settings": {
         "sqltools.connections": [
@@ -34,15 +34,17 @@
             "port": 5432,
             "database": "learning",
             "username": "postgres",
-            "password": "pass"
-          }
+            "password": "pass",
+          },
         ],
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
-        "editor.tabSize": 2
-      }
-    }
+        "editor.tabSize": 2,
+      },
+    },
   },
 
-  "postCreateCommand": "bash .devcontainer/setup.sh"
+  "forwardPorts": [8080, 16686],
+
+  "postCreateCommand": "bash .devcontainer/setup.sh",
 }
