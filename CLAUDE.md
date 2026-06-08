@@ -76,6 +76,8 @@ if (!result) { /* result.error() でメッセージ取得 */ }
 | フェーズ8-2 | Go User / Team API エンドポイント（handler/user_handler.go・team_handler.go） | ✅ |
 | フェーズ8-3 | Go Period / Objective API エンドポイント（handler/period_handler.go・objective_handler.go） | ✅ |
 | フェーズ8-4 | Go KeyResult API エンドポイント（handler/keyresult_handler.go）・統一エラーハンドリング | ✅ |
+| テスト整備-4 | Go UseCase 単体テスト（application/usecase/・モックリポジトリ・19テスト全 PASS） | ✅ |
+| Observability-1 | OpenTelemetry SDK + Jaeger exporter セットアップ（internal/telemetry/tracer.go・otelecho ミドルウェア・docker-compose.yml Jaeger サービス追加） | ✅ |
 
 ### Go API エンドポイント一覧
 
