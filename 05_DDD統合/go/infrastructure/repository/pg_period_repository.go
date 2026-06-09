@@ -7,11 +7,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/period"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/team"
 	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
 )
+
+const periodTracerName = "okr/infrastructure/repository/period"
 
 var _ domainrepo.PeriodRepository = (*PgPeriodRepository)(nil)
 
@@ -27,6 +31,10 @@ func NewPgPeriodRepository(pool *pgxpool.Pool) *PgPeriodRepository {
 // ─── FindByID ───────────────────────────────────────────────────────────────
 
 func (r *PgPeriodRepository) FindByID(ctx context.Context, id period.PeriodId) (*period.Period, error) {
+	ctx, span := otel.Tracer(periodTracerName).Start(ctx, "PgPeriodRepository.FindByID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.period.id", id.Value()))
+
 	const q = `
 		SELECT id, team_id, name, half, start_date, end_date, created_at, updated_at
 		FROM periods WHERE id = $1`
@@ -45,6 +53,10 @@ func (r *PgPeriodRepository) FindByID(ctx context.Context, id period.PeriodId) (
 // ─── FindByTeamID ────────────────────────────────────────────────────────────
 
 func (r *PgPeriodRepository) FindByTeamID(ctx context.Context, teamId team.TeamId) ([]period.Period, error) {
+	ctx, span := otel.Tracer(periodTracerName).Start(ctx, "PgPeriodRepository.FindByTeamID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.team.id", teamId.Value()))
+
 	const q = `
 		SELECT id, team_id, name, half, start_date, end_date, created_at, updated_at
 		FROM periods WHERE team_id = $1 ORDER BY start_date ASC`
@@ -60,6 +72,9 @@ func (r *PgPeriodRepository) FindByTeamID(ctx context.Context, teamId team.TeamI
 // ─── FindAll ─────────────────────────────────────────────────────────────────
 
 func (r *PgPeriodRepository) FindAll(ctx context.Context) ([]period.Period, error) {
+	ctx, span := otel.Tracer(periodTracerName).Start(ctx, "PgPeriodRepository.FindAll")
+	defer span.End()
+
 	const q = `
 		SELECT id, team_id, name, half, start_date, end_date, created_at, updated_at
 		FROM periods ORDER BY created_at ASC`
@@ -75,6 +90,10 @@ func (r *PgPeriodRepository) FindAll(ctx context.Context) ([]period.Period, erro
 // ─── Save (upsert) ──────────────────────────────────────────────────────────
 
 func (r *PgPeriodRepository) Save(ctx context.Context, p period.Period) error {
+	ctx, span := otel.Tracer(periodTracerName).Start(ctx, "PgPeriodRepository.Save")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.period.id", p.ID().Value()))
+
 	const q = `
 		INSERT INTO periods (id, team_id, name, half, start_date, end_date)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -101,6 +120,10 @@ func (r *PgPeriodRepository) Save(ctx context.Context, p period.Period) error {
 // ─── Remove ──────────────────────────────────────────────────────────────────
 
 func (r *PgPeriodRepository) Remove(ctx context.Context, id period.PeriodId) error {
+	ctx, span := otel.Tracer(periodTracerName).Start(ctx, "PgPeriodRepository.Remove")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.period.id", id.Value()))
+
 	_, err := r.pool.Exec(ctx, `DELETE FROM periods WHERE id = $1`, id.Value())
 	if err != nil {
 		return fmt.Errorf("PgPeriodRepository.Remove: %w", err)

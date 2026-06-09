@@ -7,12 +7,16 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/keyresult"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/objective"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
 	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
 )
+
+const keyResultTracerName = "okr/infrastructure/repository/keyresult"
 
 var _ domainrepo.KeyResultRepository = (*PgKeyResultRepository)(nil)
 
@@ -30,6 +34,10 @@ func NewPgKeyResultRepository(pool *pgxpool.Pool) *PgKeyResultRepository {
 // ─── FindByID ───────────────────────────────────────────────────────────────
 
 func (r *PgKeyResultRepository) FindByID(ctx context.Context, id keyresult.KeyResultId) (*keyresult.KeyResult, error) {
+	ctx, span := otel.Tracer(keyResultTracerName).Start(ctx, "PgKeyResultRepository.FindByID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.key_result.id", id.Value()))
+
 	const q = `
 		SELECT id, objective_id, owner_id, title, kr_type,
 		       target_value, current_value, is_completed, display_order, created_at, updated_at
@@ -55,6 +63,10 @@ func (r *PgKeyResultRepository) FindByID(ctx context.Context, id keyresult.KeyRe
 // ─── FindByObjectiveID ───────────────────────────────────────────────────────
 
 func (r *PgKeyResultRepository) FindByObjectiveID(ctx context.Context, objectiveId objective.ObjectiveId) ([]keyresult.KeyResult, error) {
+	ctx, span := otel.Tracer(keyResultTracerName).Start(ctx, "PgKeyResultRepository.FindByObjectiveID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.objective.id", objectiveId.Value()))
+
 	const q = `
 		SELECT id, objective_id, owner_id, title, kr_type,
 		       target_value, current_value, is_completed, display_order, created_at, updated_at
@@ -71,6 +83,10 @@ func (r *PgKeyResultRepository) FindByObjectiveID(ctx context.Context, objective
 // ─── FindByOwnerID ───────────────────────────────────────────────────────────
 
 func (r *PgKeyResultRepository) FindByOwnerID(ctx context.Context, ownerId user.UserId) ([]keyresult.KeyResult, error) {
+	ctx, span := otel.Tracer(keyResultTracerName).Start(ctx, "PgKeyResultRepository.FindByOwnerID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", ownerId.Value()))
+
 	const q = `
 		SELECT id, objective_id, owner_id, title, kr_type,
 		       target_value, current_value, is_completed, display_order, created_at, updated_at
@@ -87,6 +103,10 @@ func (r *PgKeyResultRepository) FindByOwnerID(ctx context.Context, ownerId user.
 // ─── Save ────────────────────────────────────────────────────────────────────
 
 func (r *PgKeyResultRepository) Save(ctx context.Context, kr keyresult.KeyResult) error {
+	ctx, span := otel.Tracer(keyResultTracerName).Start(ctx, "PgKeyResultRepository.Save")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.key_result.id", kr.ID().Value()))
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("PgKeyResultRepository.Save begin: %w", err)
@@ -143,6 +163,10 @@ func (r *PgKeyResultRepository) Save(ctx context.Context, kr keyresult.KeyResult
 // ─── Remove ──────────────────────────────────────────────────────────────────
 
 func (r *PgKeyResultRepository) Remove(ctx context.Context, id keyresult.KeyResultId) error {
+	ctx, span := otel.Tracer(keyResultTracerName).Start(ctx, "PgKeyResultRepository.Remove")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.key_result.id", id.Value()))
+
 	_, err := r.pool.Exec(ctx, `DELETE FROM key_results WHERE id = $1`, id.Value())
 	if err != nil {
 		return fmt.Errorf("PgKeyResultRepository.Remove: %w", err)

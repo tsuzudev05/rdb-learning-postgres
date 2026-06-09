@@ -7,11 +7,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/team"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
 	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
 )
+
+const teamTracerName = "okr/infrastructure/repository/team"
 
 var _ domainrepo.TeamRepository = (*PgTeamRepository)(nil)
 
@@ -29,6 +33,10 @@ func NewPgTeamRepository(pool *pgxpool.Pool) *PgTeamRepository {
 // ─── FindByID ───────────────────────────────────────────────────────────────
 
 func (r *PgTeamRepository) FindByID(ctx context.Context, id team.TeamId) (*team.Team, error) {
+	ctx, span := otel.Tracer(teamTracerName).Start(ctx, "PgTeamRepository.FindByID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.team.id", id.Value()))
+
 	const q = `
 		SELECT id, name, description, created_at, updated_at
 		FROM teams WHERE id = $1`
@@ -56,6 +64,10 @@ func (r *PgTeamRepository) FindByID(ctx context.Context, id team.TeamId) (*team.
 // ─── FindByUserID ────────────────────────────────────────────────────────────
 
 func (r *PgTeamRepository) FindByUserID(ctx context.Context, uid user.UserId) ([]team.Team, error) {
+	ctx, span := otel.Tracer(teamTracerName).Start(ctx, "PgTeamRepository.FindByUserID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", uid.Value()))
+
 	const q = `
 		SELECT t.id, t.name, t.description, t.created_at, t.updated_at
 		FROM teams t
@@ -74,6 +86,9 @@ func (r *PgTeamRepository) FindByUserID(ctx context.Context, uid user.UserId) ([
 // ─── FindAll ─────────────────────────────────────────────────────────────────
 
 func (r *PgTeamRepository) FindAll(ctx context.Context) ([]team.Team, error) {
+	ctx, span := otel.Tracer(teamTracerName).Start(ctx, "PgTeamRepository.FindAll")
+	defer span.End()
+
 	const q = `SELECT id, name, description, created_at, updated_at FROM teams ORDER BY created_at ASC`
 	rows, err := r.pool.Query(ctx, q)
 	if err != nil {
@@ -86,6 +101,10 @@ func (r *PgTeamRepository) FindAll(ctx context.Context) ([]team.Team, error) {
 // ─── Save (upsert team + full-replace members) ───────────────────────────────
 
 func (r *PgTeamRepository) Save(ctx context.Context, t team.Team) error {
+	ctx, span := otel.Tracer(teamTracerName).Start(ctx, "PgTeamRepository.Save")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.team.id", t.ID().Value()))
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("PgTeamRepository.Save begin: %w", err)
@@ -124,6 +143,10 @@ func (r *PgTeamRepository) Save(ctx context.Context, t team.Team) error {
 // ─── Remove ──────────────────────────────────────────────────────────────────
 
 func (r *PgTeamRepository) Remove(ctx context.Context, id team.TeamId) error {
+	ctx, span := otel.Tracer(teamTracerName).Start(ctx, "PgTeamRepository.Remove")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.team.id", id.Value()))
+
 	_, err := r.pool.Exec(ctx, `DELETE FROM teams WHERE id = $1`, id.Value())
 	if err != nil {
 		return fmt.Errorf("PgTeamRepository.Remove: %w", err)

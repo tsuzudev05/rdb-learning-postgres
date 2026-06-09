@@ -81,6 +81,7 @@ if (!result) { /* result.error() でメッセージ取得 */ }
 | フェーズ8-4 | Go KeyResult API エンドポイント（handler/keyresult_handler.go）・統一エラーハンドリング | ✅ |
 | テスト整備-4 | Go UseCase 単体テスト（application/usecase/・モックリポジトリ・19テスト全 PASS） | ✅ |
 | Observability-1 | OpenTelemetry SDK + Jaeger exporter セットアップ（internal/telemetry/tracer.go・otelecho ミドルウェア・docker-compose.yml Jaeger サービス追加） | ✅ |
+| Observability-2 | HTTP ミドルウェアスパン伝播（W3C TraceContext プロパゲーター設定）・全 Repository メソッドへのスパン追加（pg_*_repository.go × 5） | ✅ |
 
 ### Go API エンドポイント一覧
 
