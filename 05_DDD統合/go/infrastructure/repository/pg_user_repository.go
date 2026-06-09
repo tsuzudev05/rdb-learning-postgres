@@ -8,10 +8,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
 	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
 )
+
+const userTracerName = "okr/infrastructure/repository/user"
 
 // Compile-time check: PgUserRepository must satisfy UserRepository.
 var _ domainrepo.UserRepository = (*PgUserRepository)(nil)
@@ -34,6 +38,10 @@ func NewPgUserRepository(pool *pgxpool.Pool) *PgUserRepository {
 // ─── FindByID ───────────────────────────────────────────────────────────────
 
 func (r *PgUserRepository) FindByID(ctx context.Context, id user.UserId) (*user.User, error) {
+	ctx, span := otel.Tracer(userTracerName).Start(ctx, "PgUserRepository.FindByID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", id.Value()))
+
 	const q = `
 		SELECT id, name, email, password_hash, created_at, updated_at
 		FROM users
@@ -53,6 +61,10 @@ func (r *PgUserRepository) FindByID(ctx context.Context, id user.UserId) (*user.
 // ─── FindByEmail ────────────────────────────────────────────────────────────
 
 func (r *PgUserRepository) FindByEmail(ctx context.Context, email user.Email) (*user.User, error) {
+	ctx, span := otel.Tracer(userTracerName).Start(ctx, "PgUserRepository.FindByEmail")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.email", email.Value()))
+
 	const q = `
 		SELECT id, name, email, password_hash, created_at, updated_at
 		FROM users
@@ -72,6 +84,9 @@ func (r *PgUserRepository) FindByEmail(ctx context.Context, email user.Email) (*
 // ─── FindAll ────────────────────────────────────────────────────────────────
 
 func (r *PgUserRepository) FindAll(ctx context.Context) ([]user.User, error) {
+	ctx, span := otel.Tracer(userTracerName).Start(ctx, "PgUserRepository.FindAll")
+	defer span.End()
+
 	const q = `
 		SELECT id, name, email, password_hash, created_at, updated_at
 		FROM users
@@ -100,6 +115,10 @@ func (r *PgUserRepository) FindAll(ctx context.Context) ([]user.User, error) {
 // ─── Save (upsert) ──────────────────────────────────────────────────────────
 
 func (r *PgUserRepository) Save(ctx context.Context, u user.User) error {
+	ctx, span := otel.Tracer(userTracerName).Start(ctx, "PgUserRepository.Save")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", u.ID().Value()))
+
 	const q = `
 		INSERT INTO users (id, name, email, password_hash)
 		VALUES ($1, $2, $3, $4)
@@ -123,6 +142,10 @@ func (r *PgUserRepository) Save(ctx context.Context, u user.User) error {
 // ─── Remove ─────────────────────────────────────────────────────────────────
 
 func (r *PgUserRepository) Remove(ctx context.Context, id user.UserId) error {
+	ctx, span := otel.Tracer(userTracerName).Start(ctx, "PgUserRepository.Remove")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", id.Value()))
+
 	const q = `DELETE FROM users WHERE id = $1`
 	_, err := r.pool.Exec(ctx, q, id.Value())
 	if err != nil {

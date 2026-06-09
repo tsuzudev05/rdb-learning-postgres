@@ -7,12 +7,16 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/objective"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/period"
 	"github.com/tsuzudev05/rdb-learning-postgres/okr/domain/model/user"
 	domainrepo "github.com/tsuzudev05/rdb-learning-postgres/okr/domain/repository"
 )
+
+const objectiveTracerName = "okr/infrastructure/repository/objective"
 
 var _ domainrepo.ObjectiveRepository = (*PgObjectiveRepository)(nil)
 
@@ -28,6 +32,10 @@ func NewPgObjectiveRepository(pool *pgxpool.Pool) *PgObjectiveRepository {
 // ─── FindByID ───────────────────────────────────────────────────────────────
 
 func (r *PgObjectiveRepository) FindByID(ctx context.Context, id objective.ObjectiveId) (*objective.Objective, error) {
+	ctx, span := otel.Tracer(objectiveTracerName).Start(ctx, "PgObjectiveRepository.FindByID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.objective.id", id.Value()))
+
 	const q = `
 		SELECT id, period_id, owner_id, title, description, display_order, created_at, updated_at
 		FROM objectives WHERE id = $1`
@@ -46,6 +54,10 @@ func (r *PgObjectiveRepository) FindByID(ctx context.Context, id objective.Objec
 // ─── FindByPeriodID ──────────────────────────────────────────────────────────
 
 func (r *PgObjectiveRepository) FindByPeriodID(ctx context.Context, periodId period.PeriodId) ([]objective.Objective, error) {
+	ctx, span := otel.Tracer(objectiveTracerName).Start(ctx, "PgObjectiveRepository.FindByPeriodID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.period.id", periodId.Value()))
+
 	const q = `
 		SELECT id, period_id, owner_id, title, description, display_order, created_at, updated_at
 		FROM objectives WHERE period_id = $1 ORDER BY display_order ASC`
@@ -61,6 +73,10 @@ func (r *PgObjectiveRepository) FindByPeriodID(ctx context.Context, periodId per
 // ─── FindByOwnerID ───────────────────────────────────────────────────────────
 
 func (r *PgObjectiveRepository) FindByOwnerID(ctx context.Context, ownerId user.UserId) ([]objective.Objective, error) {
+	ctx, span := otel.Tracer(objectiveTracerName).Start(ctx, "PgObjectiveRepository.FindByOwnerID")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.user.id", ownerId.Value()))
+
 	const q = `
 		SELECT id, period_id, owner_id, title, description, display_order, created_at, updated_at
 		FROM objectives WHERE owner_id = $1 ORDER BY created_at ASC`
@@ -76,6 +92,10 @@ func (r *PgObjectiveRepository) FindByOwnerID(ctx context.Context, ownerId user.
 // ─── Save (upsert) ──────────────────────────────────────────────────────────
 
 func (r *PgObjectiveRepository) Save(ctx context.Context, o objective.Objective) error {
+	ctx, span := otel.Tracer(objectiveTracerName).Start(ctx, "PgObjectiveRepository.Save")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.objective.id", o.ID().Value()))
+
 	const q = `
 		INSERT INTO objectives (id, period_id, owner_id, title, description, display_order)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -101,6 +121,10 @@ func (r *PgObjectiveRepository) Save(ctx context.Context, o objective.Objective)
 // ─── Remove ──────────────────────────────────────────────────────────────────
 
 func (r *PgObjectiveRepository) Remove(ctx context.Context, id objective.ObjectiveId) error {
+	ctx, span := otel.Tracer(objectiveTracerName).Start(ctx, "PgObjectiveRepository.Remove")
+	defer span.End()
+	span.SetAttributes(attribute.String("db.objective.id", id.Value()))
+
 	_, err := r.pool.Exec(ctx, `DELETE FROM objectives WHERE id = $1`, id.Value())
 	if err != nil {
 		return fmt.Errorf("PgObjectiveRepository.Remove: %w", err)
