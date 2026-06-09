@@ -2,11 +2,14 @@
 
 Claude Code がこのリポジトリで作業する際に参照するコンテキストファイル。
 
+> **🎉 プロジェクト完了（2026-06-09）**
+> 全フェーズ・テスト整備・Observability 実装・Zenn 記事執筆を完了。
+
 ---
 
 ## プロジェクト概要
 
-OKR管理ツール（C++ × TypeScript × PostgreSQL）  
+OKR管理ツール（C++ × Go × PostgreSQL）  
 チーム単位でOKRを管理するWebアプリケーション。DDD / クリーンアーキテクチャで実装する。
 
 ---
